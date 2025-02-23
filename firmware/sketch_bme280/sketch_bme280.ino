@@ -5,22 +5,21 @@
 #include <WiFiUDP.h>
 #include <secrets.h>
 
-/*
-TODO: сейчас идеальная ситуация когда сеть доступна,
-в случае если сеть не доступна надо
-*/
-
 #define LED_BUILTIN 8 // Internal LED pin is 8 as per schematic
 
-// Настройка I2C
 #define BME_SDA 5     // GPIO 5 (SDA)
 #define BME_SCL 6     // GPIO 6 (SCL)
 #define BME_ADDR 0x76 // Адрес BME280 по умолчанию 0x76 (может быть 0x77)
 
 #define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP 3           /* Time ESP32 will go to sleep (in seconds) */
+#define TIME_TO_SLEEP 5           /* Time ESP32 will go to sleep (in seconds) */
 
-// #define DEBUG 1 // 1 - включить отладку, 0 - отключить
+#define PACKETS_COUNT 5
+#define PACKETS_INTERVAL 500
+
+#define WIFI_CONNECTED(x) digitalWrite(LED_BUILTIN, !x);
+
+// #define DEBUG
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
 #define DEBUG_PRINTLN(x) Serial.println(x)
@@ -38,48 +37,23 @@ struct SensorData
 };
 #pragma pack(pop)
 
-// Настройки UDP
-const char *udpAddress = "192.168.1.255"; // Широковещательный адрес
-const int udpPort = 12345;                // Порт UDP-сервера
-
-#define PACKETS_COUNT 5
-#define PACKETS_INTERVAL 1000
-
 WiFiUDP udp;
 Adafruit_BME280 bme;
 
-// Флаги для управления состоянием
-bool wifiConnected = false;
-
-void _shutdown()
+void enterDeepSleep()
 {
+  esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+  DEBUG_PRINTLN("Entering Deep Sleep for " + String(TIME_TO_SLEEP) + " seconds");
 
 #ifdef DEBUG
   Serial.flush();
-  Serial.end();
 #endif
-
-  Wire.end();
-  udp.flush();
-}
-
-void enterDeepSleep()
-{
-  _shutdown();
-
-  esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
-  DEBUG_PRINTLN("Entering Deep Sleep for " + String(TIME_TO_SLEEP) + " seconds");
   esp_deep_sleep_start();
 }
 
 // Функция для отправки данных и перехода в сон
-bool _sendData()
+bool sendData()
 {
-  if (!wifiConnected)
-  {
-    return false;
-  }
-
   if (udp.beginPacket(udpAddress, udpPort))
   {
     struct SensorData data;
@@ -103,43 +77,46 @@ bool _sendData()
 void sendDataTask()
 {
   int packetCounter = 0;
-  while (packetCounter <= PACKETS_COUNT)
+  while (packetCounter < PACKETS_COUNT)
   {
-    if (_sendData())
+    if (sendData())
     {
       packetCounter++;
       delay(PACKETS_INTERVAL);
     }
   }
+
+  udp.flush();
 }
 
-void setWifiConnected(bool flag)
+inline void setWifiConnected(bool flag)
 {
-  wifiConnected = flag;
   digitalWrite(LED_BUILTIN, !flag);
 }
 
-void connectToWiFi(const char *ssid, const char *pwd)
+bool connectToWiFi(const char *ssid, const char *password)
 {
   DEBUG_PRINTLN("Connecting to WiFi network: " + String(ssid));
 
   setWifiConnected(false);
-  WiFi.disconnect(true);
 
   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, pwd);
+  WiFi.begin(ssid, password);
 
   DEBUG_PRINTLN("Waiting for WIFI connection...");
 
   if (WiFi.waitForConnectResult() != WL_CONNECTED)
   {
     DEBUG_PRINTLN("WiFi Failed");
-    enterDeepSleep();
+    return false;
   }
 
   DEBUG_PRINT("Got IP: ");
   DEBUG_PRINTLN(WiFi.localIP());
+
   setWifiConnected(true);
+
+  return true;
 }
 
 void setup()
@@ -159,11 +136,17 @@ void setup()
   DEBUG_PRINTLN("BME280 sensor connected!");
 
   pinMode(LED_BUILTIN, OUTPUT);
-  connectToWiFi(ssid, password);
 
-  sendDataTask();
+  if (connectToWiFi(ssid, password))
+  {
+    sendDataTask();
+  }
 
   WiFi.disconnect(true);
+  setWifiConnected(false);
+
+  pinMode(LED_BUILTIN, INPUT);
+
   enterDeepSleep();
 }
 
