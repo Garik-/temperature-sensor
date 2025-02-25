@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"log"
 	"net"
 	"net/http"
 	"text/template"
 	"time"
-
-	iofs "io/fs"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -47,19 +46,21 @@ func newServer(ctx context.Context, addr string) *http.Server {
 func listenAndServe(g *errgroup.Group, gCtx context.Context, server *http.Server) {
 	g.Go(func() error {
 		log.Printf("listening on %s\n", server.Addr)
+
 		return server.ListenAndServe()
 	})
 	g.Go(func() error {
 		<-gCtx.Done()
+
 		return server.Shutdown(context.Background())
 	})
 }
 
 func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+
 			return
 		}
 
@@ -73,6 +74,7 @@ func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -85,7 +87,6 @@ func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
 		for {
 			select {
 			case data := <-ch:
-
 				response := EventResponse{
 					Current: &data,
 					Chart:   s.Series(),
@@ -93,16 +94,19 @@ func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
 
 				if _, err := fmt.Fprintf(w, "data: "); err != nil {
 					log.Printf("Error writing to client: %v\n", err)
+
 					return
 				}
 
 				if err := encoder.Encode(response); err != nil {
 					log.Printf("Error encoding JSON: %v\n", err)
+
 					return
 				}
 
 				if _, err := fmt.Fprint(w, "\n\n"); err != nil {
 					fmt.Printf("Error writing to client: %v\n", err)
+
 					return
 				}
 
@@ -117,14 +121,15 @@ func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
 
 func fileExists(fs embed.FS, path string) bool {
 	_, err := fs.Open(path)
+
 	return !errors.Is(err, iofs.ErrNotExist)
 }
 
 func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+
 			return
 		}
 
@@ -132,6 +137,7 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.Handle
 		if fileExists(publicFiles, path) {
 			r.URL.Path = path
 			fs.ServeHTTP(w, r)
+
 			return
 		}
 
@@ -144,6 +150,7 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.Handle
 		jsonData, err := json.Marshal(response)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
 			return
 		}
 
@@ -158,7 +165,6 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.Handle
 }
 
 func initServer(ctx context.Context, addr string, emitter *EventEmitter, s *Stats) (*http.Server, error) {
-
 	fs := http.FileServer(http.FS(publicFiles))
 
 	tmpl, err := template.ParseFS(templateFiles, "templates/index.html")

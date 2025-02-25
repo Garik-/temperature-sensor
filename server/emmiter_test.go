@@ -14,6 +14,7 @@ func TestEventEmitter(t *testing.T) {
 		defer emitter.Unsubscribe(ch)
 
 		var wg sync.WaitGroup
+
 		wg.Add(1)
 
 		done := make(chan struct{})

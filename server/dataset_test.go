@@ -80,23 +80,28 @@ func TestTimeSeries(t *testing.T) {
 
 func TestConcurrent(t *testing.T) {
 	set := newSetOfData()
+
 	var wg sync.WaitGroup
 
 	// Test concurrent pushes
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		wg.Add(1)
+
 		go func(i int) {
 			defer wg.Done()
+
 			timestamp := time.Date(2023, 10, 1, i%24, 0, 0, 0, time.UTC)
 			set.push(float32(i), timestamp)
 		}(i)
 	}
 
 	// Test concurrent series
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			_ = set.timeSeries()
 		}()
 	}

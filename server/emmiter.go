@@ -19,6 +19,7 @@ func (e *EventEmitter) Subscribe() chan Packet {
 
 	ch := make(chan Packet)
 	e.subscribers[ch] = struct{}{}
+
 	return ch
 }
 
@@ -30,7 +31,7 @@ func (e *EventEmitter) Unsubscribe(ch chan Packet) {
 	close(ch)
 }
 
-// Emit отправляет данные всем подписчикам
+// Emit отправляет данные всем подписчикам.
 func (e *EventEmitter) Emit(data Packet) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -51,5 +52,6 @@ func (e *EventEmitter) Close() {
 	for ch := range e.subscribers {
 		close(ch)
 	}
+
 	e.subscribers = nil
 }

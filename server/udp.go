@@ -29,12 +29,13 @@ func readFromUDP(ctx context.Context, pc net.PacketConn, emitter *EventEmitter) 
 		}
 
 		n, _, err := pc.ReadFrom(buf)
-
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
+
 			log.Printf("failed to read from UDP: %v\n", err)
+
 			continue
 		}
 

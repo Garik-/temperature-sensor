@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -13,10 +14,12 @@ import (
 
 func main() {
 	log.Printf("listening UDP on %s...\n", defaultUDPPort)
+
 	pc, err := net.ListenPacket("udp4", defaultUDPPort)
 	if err != nil {
 		panic(err)
 	}
+
 	defer pc.Close()
 
 	emitter := NewEventEmitter()
@@ -30,6 +33,7 @@ func main() {
 	srv, err := initServer(ctx, defaultHTTPAddr, emitter, stats)
 	if err != nil {
 		log.Println(err)
+
 		return
 	}
 
@@ -45,7 +49,7 @@ func main() {
 
 	listenAndServe(g, gCtx, srv)
 
-	if err := g.Wait(); err != nil && err != http.ErrServerClosed {
+	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Println(err)
 	}
 }

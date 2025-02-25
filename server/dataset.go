@@ -34,6 +34,7 @@ func (d *SetOfData) push(value float32, timestamp time.Time) {
 	}
 
 	dayData := d.data[bod]
+
 	switch {
 	case hour >= 6 && hour < 12:
 		dayData.morningSum += value
@@ -45,6 +46,7 @@ func (d *SetOfData) push(value float32, timestamp time.Time) {
 		dayData.eveningSum += value
 		dayData.eveningCount++
 	}
+
 	d.data[bod] = dayData
 }
 
@@ -54,7 +56,7 @@ func newSetOfData() *SetOfData {
 	}
 }
 
-// [[1324508400000, 34], [1324594800000, 54] , ... , [1326236400000, 43]]
+// [[1324508400000, 34], [1324594800000, 54] , ... , [1326236400000, 43]].
 type TimeSeries [][]any
 
 func toFixed(v float32) float32 {
