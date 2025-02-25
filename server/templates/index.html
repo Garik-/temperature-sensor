@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Temperature Sensor</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css">
-
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts@4.5.0" defer></script>
     <script>
@@ -68,9 +67,9 @@
                 }
             };
 
-            const temperatureSeries = [{
-                name: "Температура",
-                data: []
+            const temperatureSeries = (data) => [{
+                name: "",
+                data
             }]
 
             const temperatureChart = new ApexCharts(document.getElementById('chart-temperature-bg'), {
@@ -99,7 +98,7 @@
                     lineCap: "round",
                     curve: "smooth",
                 },
-                series: temperatureSeries,
+                series: temperatureSeries([]),
                 tooltip: {
                     theme: 'dark'
                 },
@@ -131,9 +130,9 @@
 
 
 
-            const pressureSeres = [{
-                name: "Давление",
-                data: []
+            const pressureSeres = (data) => [{
+                name: "",
+                data
             }]
 
             const pressureChart = new ApexCharts(document.getElementById('chart-pressure'), {
@@ -161,7 +160,7 @@
                 fill: {
                     opacity: 1,
                 },
-                series: pressureSeres,
+                series: pressureSeres([]),
                 tooltip: {
                     theme: 'dark'
                 },
@@ -195,7 +194,6 @@
             temperatureChart.render();
             pressureChart.render();
 
-
             const currentUrl = new URL(window.location.href);
             currentUrl.pathname = '/subscribe';
             console.log(currentUrl.toString())
@@ -213,28 +211,37 @@
                 maximumFractionDigits: 2
             });
 
-            const eventSource = new EventSource(currentUrl.toString());
-            eventSource.onmessage = function (event) {
-                const packet = JSON.parse(event.data);
-                packet.pressure = packet.pressure / 133.322;
+            const updateProgressBar = (humidity) => {
+                const label = formatter.format(humidity) + "%"
 
-                console.log(packet);
+                progressBarHumidity.style = "width:" + humidity.toFixed(2) + "%";
+                progressBarHumidity.setAttribute('aria-valuenow', +humidity.toFixed(2));
+                progressBarHumidity.setAttribute('aria-label', label);
+                progressBarHumiditySpan.textContent = label;
+            }
 
-                pressureSeres[0].data.push([Date.now(), +packet.pressure.toFixed(2)]);
-                pressureChart.updateSeries(pressureSeres);
-                valuePressure.textContent = formatter.format(packet.pressure)
+            const onEvent = (state) => {
+                const { current, chart } = state;
+                console.log(current);
 
-                temperatureSeries[0].data.push([Date.now(), +packet.temperature.toFixed(2)])
-                temperatureChart.updateSeries(temperatureSeries);
-                valueTemperature.textContent = formatter.format(packet.temperature);
+                valueTemperature.textContent = formatter.format(current.temperature);
+                valuePressure.textContent = formatter.format(current.pressure);
+                valueHumidity.textContent = formatter.format(current.humidity);
 
-                valueHumidity.textContent = formatter.format(packet.humidity);
+                updateProgressBar(current.humidity);
 
-                progressBarHumidity.style = "width:" + packet.humidity.toFixed(2) + "%";
-                progressBarHumidity.setAttribute('aria-valuenow', +packet.humidity.toFixed(2));
-                progressBarHumidity.setAttribute('aria-label', formatter.format(packet.humidity) + "%");
-                progressBarHumiditySpan.textContent = formatter.format(packet.humidity) + "%";
-            };
+                temperatureChart.updateSeries(temperatureSeries(chart.temperature));
+                pressureChart.updateSeries(pressureSeres(chart.pressure));
+            }
+
+            // init
+            onEvent({{.JSONData }});
+
+
+        const eventSource = new EventSource(currentUrl.toString());
+        eventSource.onmessage = function (event) {
+            onEvent(JSON.parse(event.data))
+        };
         });
     </script>
 </head>
@@ -260,7 +267,7 @@
                             <div class="card">
                                 <div class="card-body">
                                     <div class="subheader">Температура</div>
-                                    <div class="h1"><span id="value-temperature">27.5</span>°</div>
+                                    <div class="h1"><span id="value-temperature"></span>°</div>
                                 </div>
                                 <div id="chart-temperature-bg" class="chart-sm"></div>
                             </div>
@@ -269,14 +276,13 @@
                             <div class="card">
                                 <div class="card-body d-flex flex-column">
                                     <div class="subheader">Влажность</div>
-                                    <div class="h1"><span id="value-humidity">24.5</span>%</div>
+                                    <div class="h1"><span id="value-humidity"></span>%</div>
 
                                     <div class="progress progress-sm mt-auto" bis_skin_checked="1">
-                                        <div class="progress-bar bg-primary" style="width: 75%"
-                                            id="progress-bar-humidity" role="progressbar" aria-valuenow="75"
-                                            aria-valuemin="0" aria-valuemax="100" aria-label="75% Complete"
-                                            bis_skin_checked="1">
-                                            <span class="visually-hidden">75% Complete</span>
+                                        <div class="progress-bar bg-primary" style="width: 0%"
+                                            id="progress-bar-humidity" role="progressbar" aria-valuenow="0"
+                                            aria-valuemin="0" aria-valuemax="100" aria-label="" bis_skin_checked="1">
+                                            <span class="visually-hidden"></span>
                                         </div>
                                     </div>
 
@@ -288,7 +294,7 @@
                                 <div class="card-body">
                                     <div class="subheader">Давление</div>
                                     <div class="d-flex align-items-baseline">
-                                        <div class="h1 mb-0 me-2" id="value-pressure">756</div>
+                                        <div class="h1 mb-0 me-2" id="value-pressure"></div>
                                         <div class="me-auto">мм рт. ст.</div>
                                     </div>
                                     <div id="chart-pressure" class="chart-sm"></div>
