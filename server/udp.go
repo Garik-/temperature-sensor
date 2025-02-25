@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -25,12 +27,13 @@ func readFromUDP(ctx context.Context, pc net.PacketConn, emitter *EventEmitter) 
 
 		err := pc.SetReadDeadline(time.Now().Add(readFromTimeout))
 		if err != nil {
-			return err
+			return fmt.Errorf("setReadDeadline: %w", err)
 		}
 
 		n, _, err := pc.ReadFrom(buf)
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
 				continue
 			}
 

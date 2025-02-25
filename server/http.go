@@ -20,6 +20,7 @@ const (
 	readHeaderTimeout = 2 * time.Second
 	defaultHTTPAddr   = ":8001"
 	defaultStaticDir  = "./../frontend"
+	shutdownTimeout   = 2 * time.Second
 )
 
 type EventResponse struct {
@@ -43,7 +44,7 @@ func newServer(ctx context.Context, addr string) *http.Server {
 	}
 }
 
-func listenAndServe(g *errgroup.Group, gCtx context.Context, server *http.Server) {
+func listenAndServe(mCtx context.Context, gCtx context.Context, g *errgroup.Group, server *http.Server) {
 	g.Go(func() error {
 		log.Printf("listening on %s\n", server.Addr)
 
@@ -52,7 +53,10 @@ func listenAndServe(g *errgroup.Group, gCtx context.Context, server *http.Server
 	g.Go(func() error {
 		<-gCtx.Done()
 
-		return server.Shutdown(context.Background())
+		ctx, cancel := context.WithTimeout(mCtx, shutdownTimeout)
+		defer cancel()
+
+		return server.Shutdown(ctx)
 	})
 }
 
@@ -160,7 +164,10 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.Handle
 			JSONData: string(jsonData),
 		}
 
-		tmpl.Execute(w, data)
+		err = tmpl.Execute(w, data)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
 	}
 }
 

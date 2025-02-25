@@ -23,8 +23,8 @@ func TestPush(t *testing.T) {
 	set.push(10.5, morningTime)
 	set.push(15.5, morningTime)
 
-	assert.Equal(t, float32(26), set.data[bod].morningSum)
-	assert.Equal(t, float32(2), set.data[bod].morningCount)
+	assert.InEpsilon(t, float32(26), set.data[bod].morningSum, 1e-6)
+	assert.InEpsilon(t, float32(2), set.data[bod].morningCount, 1e-6)
 
 	// Test day data
 	dayTime := time.Date(2023, 10, 1, 14, 0, 0, 0, time.UTC)
@@ -32,8 +32,8 @@ func TestPush(t *testing.T) {
 	set.push(20.5, dayTime)
 	set.push(25.5, dayTime)
 
-	assert.Equal(t, float32(46), set.data[bod].daySum)
-	assert.Equal(t, float32(2), set.data[bod].dayCount)
+	assert.InEpsilon(t, float32(46), set.data[bod].daySum, 1e-6)
+	assert.InEpsilon(t, float32(2), set.data[bod].dayCount, 1e-6)
 
 	// Test evening data
 	eveningTime := time.Date(2023, 10, 1, 20, 0, 0, 0, time.UTC)
@@ -41,8 +41,8 @@ func TestPush(t *testing.T) {
 	set.push(30.5, eveningTime)
 	set.push(35.5, eveningTime)
 
-	assert.Equal(t, float32(66), set.data[bod].eveningSum)
-	assert.Equal(t, float32(2), set.data[bod].eveningCount)
+	assert.InEpsilon(t, float32(66), set.data[bod].eveningSum, 1e-6)
+	assert.InEpsilon(t, float32(2), set.data[bod].eveningCount, 1e-6)
 }
 
 func TestTimeSeries(t *testing.T) {

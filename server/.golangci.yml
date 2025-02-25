@@ -4,3 +4,11 @@ run:
 
 linters:
   enable-all: true
+  disable:
+    - paralleltest
+    - tenv
+    - varnamelen
+    - mnd
+    - exhaustruct
+    - forbidigo
+    - depguard

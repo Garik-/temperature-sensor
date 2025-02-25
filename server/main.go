@@ -47,7 +47,7 @@ func main() {
 		return stats.Subscribe(gCtx, emitter)
 	})
 
-	listenAndServe(g, gCtx, srv)
+	listenAndServe(ctx, gCtx, g, srv)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Println(err)

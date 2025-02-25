@@ -40,7 +40,6 @@ func (e *EventEmitter) Emit(data Packet) {
 		select {
 		case ch <- data: // Отправляем данные в канал подписчика
 		default:
-			// Если канал заполнен, пропускаем подписчика
 		}
 	}
 }

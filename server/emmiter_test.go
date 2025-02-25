@@ -3,6 +3,7 @@ package main
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -23,6 +24,7 @@ func TestEventEmitter(t *testing.T) {
 			Temperature: 25.5,
 			Humidity:    60.0,
 			Pressure:    760.0,
+			timestamp:   time.Now(),
 		}
 
 		go func() {
@@ -31,9 +33,9 @@ func TestEventEmitter(t *testing.T) {
 			close(done)
 
 			packet := <-ch
-			assert.Equal(t, exp.Temperature, packet.Temperature)
-			assert.Equal(t, exp.Humidity, packet.Humidity)
-			assert.Equal(t, exp.Pressure, packet.Pressure)
+			assert.InEpsilon(t, exp.Temperature, packet.Temperature, 1e-6)
+			assert.InEpsilon(t, exp.Humidity, packet.Humidity, 1e-6)
+			assert.InEpsilon(t, exp.Pressure, packet.Pressure, 1e-6)
 		}()
 
 		<-done

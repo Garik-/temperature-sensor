@@ -32,7 +32,7 @@ func encodePacket(data []byte, p *Packet) error {
 		return fmt.Errorf("failed to read pressure: %w", err)
 	}
 
-	p.Pressure = p.Pressure / 133.322
+	p.Pressure /= 133.322
 	p.timestamp = time.Now()
 
 	return nil
