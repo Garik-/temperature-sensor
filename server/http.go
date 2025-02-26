@@ -16,8 +16,6 @@ import (
 
 const (
 	readHeaderTimeout = 2 * time.Second
-	defaultHTTPAddr   = ":8001"
-	defaultStaticDir  = "./../frontend"
 	shutdownTimeout   = 2 * time.Second
 )
 
@@ -49,9 +47,6 @@ func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
 
 			return
 		}
-
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Expose-Headers", "Content-Type")
 
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")

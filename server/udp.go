@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	defaultUDPPort  = ":12345"
 	readFromTimeout = 2 * time.Second
 	maxUDPSafeSize  = 1472
 )

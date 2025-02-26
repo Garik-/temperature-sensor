@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
 	"net"
 	"net/http"
@@ -12,10 +13,19 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func main() {
-	log.Printf("listening UDP on %s...\n", defaultUDPPort)
+const (
+	defaultHTTPAddr = ":8001"
+	defaultUDPPort  = ":12345"
+)
 
-	pc, err := net.ListenPacket("udp4", defaultUDPPort)
+func main() {
+	port := flag.String("port", defaultUDPPort, "UDP server port")
+	addr := flag.String("addr", defaultHTTPAddr, "HTTP Server address")
+	flag.Parse()
+
+	log.Println("listening UDP on " + *port)
+
+	pc, err := net.ListenPacket("udp4", *port)
 	if err != nil {
 		panic(err)
 	}
@@ -30,7 +40,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	srv, err := initServer(ctx, defaultHTTPAddr, emitter, stats)
+	srv, err := initServer(ctx, *addr, emitter, stats)
 	if err != nil {
 		log.Println(err)
 

@@ -1,4 +1,4 @@
-module github.com/Garik-/temperature-sensor
+module temperature-sensor
 
 go 1.23
 
