@@ -12,8 +12,6 @@ import (
 	"net/http"
 	"text/template"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -42,22 +40,6 @@ func newServer(ctx context.Context, addr string) *http.Server {
 			return ctx
 		},
 	}
-}
-
-func listenAndServe(mCtx context.Context, gCtx context.Context, g *errgroup.Group, server *http.Server) {
-	g.Go(func() error {
-		log.Printf("listening on %s\n", server.Addr)
-
-		return server.ListenAndServe()
-	})
-	g.Go(func() error {
-		<-gCtx.Done()
-
-		ctx, cancel := context.WithTimeout(mCtx, shutdownTimeout)
-		defer cancel()
-
-		return server.Shutdown(ctx)
-	})
 }
 
 func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {

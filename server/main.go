@@ -47,7 +47,20 @@ func main() {
 		return stats.Subscribe(gCtx, emitter)
 	})
 
-	listenAndServe(ctx, gCtx, g, srv)
+	g.Go(func() error {
+		log.Println("listening on " + srv.Addr)
+
+		return srv.ListenAndServe()
+	})
+
+	g.Go(func() error {
+		<-gCtx.Done()
+
+		ctx, cancel := context.WithTimeout(ctx, shutdownTimeout)
+		defer cancel()
+
+		return srv.Shutdown(ctx)
+	})
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Println(err)
