@@ -36,13 +36,13 @@ func (d *setOfData) push(value float32, timestamp time.Time) {
 	dayData := d.data[bod]
 
 	switch {
-	case hour >= 6 && hour < 12:
+	case hour >= 6 && hour < 14:
 		dayData.morningSum += value
 		dayData.morningCount++
-	case hour >= 12 && hour < 18:
+	case hour >= 14 && hour < 19:
 		dayData.daySum += value
 		dayData.dayCount++
-	case hour >= 18 || hour < 6:
+	case hour >= 19 || hour < 6:
 		dayData.eveningSum += value
 		dayData.eveningCount++
 	}
