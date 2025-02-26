@@ -1,4 +1,4 @@
-package main
+package web
 
 import (
 	"context"
@@ -12,16 +12,28 @@ import (
 	"net/http"
 	"text/template"
 	"time"
+
+	"temperature-sensor/internal/dataset"
+	"temperature-sensor/internal/packet"
 )
 
 const (
 	readHeaderTimeout = 2 * time.Second
-	shutdownTimeout   = 2 * time.Second
 )
 
-type EventResponse struct {
-	Current *Packet `json:"current"`
-	Chart   *Series `json:"chart"`
+type stats interface {
+	Series() *dataset.Series
+	Current() packet.Packet
+}
+
+type eventEmitter interface {
+	Subscribe() chan packet.Packet
+	Unsubscribe(ch chan packet.Packet)
+}
+
+type eventResponse struct {
+	Current *packet.Packet  `json:"current"`
+	Chart   *dataset.Series `json:"chart"`
 }
 
 //go:embed public
@@ -40,7 +52,7 @@ func newServer(ctx context.Context, addr string) *http.Server {
 	}
 }
 
-func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
+func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -68,7 +80,7 @@ func subscribeHandler(emitter *EventEmitter, s *Stats) http.HandlerFunc {
 		for {
 			select {
 			case data := <-ch:
-				response := EventResponse{
+				response := eventResponse{
 					Current: &data,
 					Chart:   s.Series(),
 				}
@@ -106,7 +118,7 @@ func fileExists(fs embed.FS, path string) bool {
 	return !errors.Is(err, iofs.ErrNotExist)
 }
 
-func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.HandlerFunc {
+func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -123,7 +135,7 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.Handle
 		}
 
 		current := s.Current()
-		response := EventResponse{
+		response := eventResponse{
 			Current: &current,
 			Chart:   s.Series(),
 		}
@@ -148,7 +160,7 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s *Stats) http.Handle
 	}
 }
 
-func initServer(ctx context.Context, addr string, emitter *EventEmitter, s *Stats) (*http.Server, error) {
+func New(ctx context.Context, addr string, emitter eventEmitter, s stats) (*http.Server, error) {
 	fs := http.FileServer(http.FS(publicFiles))
 
 	tmpl, err := template.ParseFS(templateFiles, "templates/index.html")

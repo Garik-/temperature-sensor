@@ -1,5 +1,4 @@
-// filepath: /Users/garikdjan/code/temperature-sensor/server/dataset_test.go
-package main
+package dataset //nolint:testpackage
 
 import (
 	"sync"
@@ -63,7 +62,7 @@ func TestTimeSeries(t *testing.T) {
 
 	series := set.timeSeries()
 
-	expectedSeries := TimeSeries{
+	expectedSeries := timeSeries{
 		{morningTime.Truncate(24 * time.Hour).Add(8 * time.Hour).UnixMilli(), toFixed(26 / 2)},
 		{dayTime.Truncate(24 * time.Hour).Add(14 * time.Hour).UnixMilli(), toFixed(46 / 2)},
 		{eveningTime.Truncate(24 * time.Hour).Add(20 * time.Hour).UnixMilli(), toFixed(66 / 2)},

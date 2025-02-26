@@ -1,4 +1,4 @@
-package main
+package dataset
 
 import (
 	"math"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type AggregatedData struct {
+type aggregatedData struct {
 	morningSum,
 	daySum,
 	eveningSum,
@@ -15,14 +15,14 @@ type AggregatedData struct {
 	eveningCount float32
 }
 
-type DailyAggregatedData map[int64]AggregatedData
+type dailyAggregatedData map[int64]aggregatedData
 
-type SetOfData struct {
+type setOfData struct {
 	mu   sync.RWMutex
-	data DailyAggregatedData
+	data dailyAggregatedData
 }
 
-func (d *SetOfData) push(value float32, timestamp time.Time) {
+func (d *setOfData) push(value float32, timestamp time.Time) {
 	bod := timestamp.Truncate(24 * time.Hour).UnixMilli()
 	hour := timestamp.Hour()
 
@@ -30,7 +30,7 @@ func (d *SetOfData) push(value float32, timestamp time.Time) {
 	defer d.mu.Unlock()
 
 	if _, exists := d.data[bod]; !exists {
-		d.data[bod] = AggregatedData{}
+		d.data[bod] = aggregatedData{}
 	}
 
 	dayData := d.data[bod]
@@ -50,24 +50,24 @@ func (d *SetOfData) push(value float32, timestamp time.Time) {
 	d.data[bod] = dayData
 }
 
-func newSetOfData() *SetOfData {
-	return &SetOfData{
-		data: make(DailyAggregatedData),
+func newSetOfData() *setOfData {
+	return &setOfData{
+		data: make(dailyAggregatedData),
 	}
 }
 
 // [[1324508400000, 34], [1324594800000, 54] , ... , [1326236400000, 43]].
-type TimeSeries [][]any
+type timeSeries [][]any
 
 func toFixed(v float32) float32 {
 	return float32(math.Round(float64(v*100)) / 100)
 }
 
-func (d *SetOfData) timeSeries() TimeSeries {
+func (d *setOfData) timeSeries() timeSeries {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	series := TimeSeries{}
+	series := timeSeries{}
 
 	for timestamp, data := range d.data {
 		bod := time.UnixMilli(timestamp)

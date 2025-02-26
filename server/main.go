@@ -5,17 +5,22 @@ import (
 	"errors"
 	"flag"
 	"log"
-	"net"
 	"net/http"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"golang.org/x/sync/errgroup"
+	"temperature-sensor/internal/dataset"
+	"temperature-sensor/internal/packet"
+	"temperature-sensor/internal/udp"
+	"temperature-sensor/internal/web"
 )
 
 const (
 	defaultHTTPAddr = ":8001"
 	defaultUDPPort  = ":12345"
+	shutdownTimeout = 2 * time.Second
 )
 
 func main() {
@@ -23,24 +28,24 @@ func main() {
 	addr := flag.String("addr", defaultHTTPAddr, "HTTP Server address")
 	flag.Parse()
 
-	log.Println("listening UDP on " + *port)
-
-	pc, err := net.ListenPacket("udp4", *port)
+	serverUDP, err := udp.Listen(*port)
 	if err != nil {
-		panic(err)
+		log.Println(err)
+
+		return
 	}
 
-	defer pc.Close()
+	defer serverUDP.Close()
 
-	emitter := NewEventEmitter()
+	emitter := packet.NewEventEmitter()
 	defer emitter.Close()
 
-	stats := newStats()
+	stats := dataset.NewStats()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	srv, err := initServer(ctx, *addr, emitter, stats)
+	serverHTTP, err := web.New(ctx, *addr, emitter, stats)
 	if err != nil {
 		log.Println(err)
 
@@ -50,7 +55,7 @@ func main() {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return readFromUDP(gCtx, pc, emitter)
+		return serverUDP.Subscribe(ctx, emitter)
 	})
 
 	g.Go(func() error {
@@ -58,9 +63,9 @@ func main() {
 	})
 
 	g.Go(func() error {
-		log.Println("listening on " + srv.Addr)
+		log.Println("listening on " + serverHTTP.Addr)
 
-		return srv.ListenAndServe()
+		return serverHTTP.ListenAndServe()
 	})
 
 	g.Go(func() error {
@@ -69,7 +74,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(ctx, shutdownTimeout)
 		defer cancel()
 
-		return srv.Shutdown(ctx)
+		return serverHTTP.Shutdown(ctx)
 	})
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -1,4 +1,4 @@
-package main
+package packet
 
 import "sync"
 
@@ -31,7 +31,6 @@ func (e *EventEmitter) Unsubscribe(ch chan Packet) {
 	close(ch)
 }
 
-// Emit отправляет данные всем подписчикам.
 func (e *EventEmitter) Emit(data Packet) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -53,4 +52,11 @@ func (e *EventEmitter) Close() {
 	}
 
 	e.subscribers = nil
+}
+
+func (e *EventEmitter) Size() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	return len(e.subscribers)
 }
