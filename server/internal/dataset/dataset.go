@@ -50,6 +50,19 @@ func (d *setOfData) push(value float32, timestamp time.Time) {
 	d.data[bod] = dayData
 }
 
+func (d *setOfData) remove(before time.Time) {
+	timestamp := before.UnixMilli()
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for key := range d.data {
+		if key < timestamp {
+			delete(d.data, key)
+		}
+	}
+}
+
 func newSetOfData() *setOfData {
 	return &setOfData{
 		data: make(dailyAggregatedData),

@@ -22,6 +22,7 @@ const (
 	defaultHTTPAddr = ":8001"
 	defaultUDPPort  = ":12345"
 	shutdownTimeout = 2 * time.Second
+	clearInterval   = 1 * 24 * time.Hour
 )
 
 func main() {
@@ -61,6 +62,10 @@ func main() {
 
 	g.Go(func() error {
 		return stats.Subscribe(gCtx, emitter)
+	})
+
+	g.Go(func() error {
+		return stats.Clear(gCtx, clearInterval)
 	})
 
 	g.Go(func() error {

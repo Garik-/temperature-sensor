@@ -2,6 +2,8 @@ package dataset
 
 import (
 	"context"
+	"log"
+	"time"
 
 	"temperature-sensor/internal/packet"
 )
@@ -55,6 +57,24 @@ func (s *Stats) Series() *Series {
 	return &Series{
 		Temperature: s.temperature.timeSeries(),
 		Pressure:    s.pressure.timeSeries(),
+	}
+}
+
+func (s *Stats) Clear(ctx context.Context, interval time.Duration) error {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case now := <-ticker.C:
+			log.Println("running scheduled task clear")
+
+			sevenDaysAgo := now.AddDate(0, 0, -7)
+			s.temperature.remove(sevenDaysAgo)
+			s.pressure.remove(sevenDaysAgo)
+		}
 	}
 }
 

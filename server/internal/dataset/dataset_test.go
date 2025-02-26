@@ -77,6 +77,19 @@ func TestTimeSeries(t *testing.T) {
 	}
 }
 
+func TestRemove(t *testing.T) {
+	set := newSetOfData()
+
+	for i := range 1000 {
+		timestamp := time.Date(2023, 10, i%20, i%24, 0, 0, 0, time.UTC)
+		set.push(float32(i), timestamp)
+	}
+
+	assert.Len(t, set.data, 20)
+	set.remove(time.Date(2023, 10, 10, 0, 0, 0, 0, time.UTC))
+	assert.Len(t, set.data, 10)
+}
+
 func TestConcurrent(t *testing.T) {
 	set := newSetOfData()
 
