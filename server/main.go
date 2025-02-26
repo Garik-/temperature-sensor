@@ -10,11 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sync/errgroup"
 	"temperature-sensor/internal/dataset"
 	"temperature-sensor/internal/packet"
 	"temperature-sensor/internal/udp"
 	"temperature-sensor/internal/web"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -25,7 +26,7 @@ const (
 
 func main() {
 	port := flag.String("port", defaultUDPPort, "UDP server port")
-	addr := flag.String("addr", defaultHTTPAddr, "HTTP Server address")
+	addr := flag.String("addr", defaultHTTPAddr, "HTTP server address")
 	flag.Parse()
 
 	serverUDP, err := udp.Listen(*port)
