@@ -1,0 +1,29 @@
+# .github/actions/setup-go/action.yml
+name: "Setup Go"
+description: "Set up Go environment"
+inputs:
+  go-version:
+    description: "Go version to install"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      shell: bash
+      run: go mod tidy && go mod download
+      working-directory: ./server
