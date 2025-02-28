@@ -5,15 +5,17 @@ on:
     paths:
       - "server/**"
       - ".github/workflows/server.yml"
-      - ".github/actions/setup-go/action.yml"
   pull_request:
     paths:
       - "server/**"
       - ".github/workflows/server.yml"
-      - ".github/actions/setup-go/action.yml"
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: ./server
 
 jobs:
   test_job:
@@ -21,28 +23,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout and set up Go
-        uses: ./.github/actions/setup-go
+      - uses: actions/setup-go@v5
         with:
           go-version: 1.23
-          working-directory: ./server
-      - name: make test
+      - name: test
         run: make test
-        working-directory: ./server
 
   vuln_job:
     name: vuln
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout and set up Go
-        uses: ./.github/actions/setup-go
+      - uses: actions/setup-go@v5
         with:
           go-version: 1.23
-          working-directory: ./server
-      - name: make vuln
+      - name: vuln
         run: make vuln
-        working-directory: ./server
 
   lint_job:
     name: lint
@@ -56,4 +52,3 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64
-          working-directory: ./server

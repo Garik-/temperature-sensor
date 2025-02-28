@@ -1,23 +1,26 @@
-.PHONY: test run lint fix build vuln
+.PHONY: test run lint fix build vuln tidy
 
-lint:
-	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run ./...
+tidy:
+	@go mod tidy
+
+lint: tidy
+	@go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run ./...
 
 
-fix:
-	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run --fix ./...
+fix: tidy
+	@go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run --fix ./...
 
 
-vuln:
+vuln: tidy
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-test:
+test: tidy
 	@go test -v -race -count=5 ./...
 
-run:
+run: tidy
 	@go run .
 
-build:
+build: tidy
 	@CGO_ENABLED=0 go build -o bin/server -ldflags '-w -s' .
 	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/server-arm64 -ldflags '-w -s' .
 	@ls -lh bin
