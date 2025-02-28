@@ -26,6 +26,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.23
+          cache-dependency-path: |
+            server/go.sum
       - name: test
         run: make test
 
@@ -37,6 +39,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.23
+          cache-dependency-path: |
+            server/go.sum
       - name: vuln
         run: make vuln
 
@@ -48,7 +52,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.23
+          cache-dependency-path: |
+            server/go.sum
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64
+          working-directory: ./server
