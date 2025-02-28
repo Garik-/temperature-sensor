@@ -12,3 +12,5 @@ linters:
     - exhaustruct
     - forbidigo
     - depguard
+    - gofumpt
+    - gci
