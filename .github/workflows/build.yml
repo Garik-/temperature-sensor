@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -32,18 +30,22 @@ jobs:
       - name: Build Go binary
         run: |
           mkdir -p build  
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o build/${{ github.repository }} -ldflags '-w -s' .
+          repo_name=${{ github.repository }}
+          repo_name=${repo_name#*/}
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o build/${repo_name} -ldflags '-w -s' .
 
       - name: Create tar.gz archive
         run: |
           cd build
-          tar -czf ${{ github.repository }}-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz ${{ github.repository }}
+          repo_name=${{ github.repository }}
+          repo_name=${repo_name#*/}
+          tar -czf ${repo_name}-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz ${repo_name}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: go-build-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: build/${{ github.repository }}-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          path: build/*.tar.gz
 
   release:
     runs-on: ubuntu-latests
