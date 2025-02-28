@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         goos: [linux] # Поддерживаем несколько операционных систем
-        goarch: [armv7, arm64] # Архитектуры для Raspberry Pi (32-бит и 64-бит)
+        goarch: [arm, arm64] # Архитектуры для Raspberry Pi (32-бит и 64-бит)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
