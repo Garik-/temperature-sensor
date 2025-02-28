@@ -18,12 +18,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Run govulncheck
     steps:
+      - uses: actions/checkout@v4
+      - name: Go to server directory
+        run: cd ./server
       - id: govulncheck
         uses: golang/govulncheck-action@v1
-
         with:
           go-version-input: 1.23
-          go-package: ./server/...
+          go-package: ./...
 
   test_job:
     name: test
@@ -60,6 +62,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.23
+      - name: Go to server directory
+        run: cd ./server
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
