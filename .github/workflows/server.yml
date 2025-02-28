@@ -5,10 +5,12 @@ on:
     paths:
       - "server/**"
       - ".github/workflows/server.yml"
+      - "./.github/actions/setup-go/action.yml"
   pull_request:
     paths:
       - "server/**"
       - ".github/workflows/server.yml"
+      - "./.github/actions/setup-go/action.yml"
 
 permissions:
   contents: read
@@ -23,6 +25,7 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: 1.23
+          working-directory: ./server
       - name: make test
         run: make test
         working-directory: ./server
@@ -36,6 +39,7 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: 1.23
+          working-directory: ./server
       - name: make vuln
         run: make vuln
         working-directory: ./server
