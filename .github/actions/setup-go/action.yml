@@ -21,9 +21,9 @@ runs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          $HOME/go/pkg/mod
+          $HOME/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('server/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
 
