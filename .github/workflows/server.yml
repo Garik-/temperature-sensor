@@ -23,6 +23,31 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: 1.23
-      - name: Run tests
+      - name: make test
         run: make test
+        working-directory: ./server
+  lint_job:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout and set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: 1.23
+      - name: make lint
+        run: make lint
+        working-directory: ./server
+
+  vuln_job:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout and set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: 1.23
+      - name: make vuln
+        run: make vuln
         working-directory: ./server

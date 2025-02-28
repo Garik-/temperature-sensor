@@ -1,10 +1,15 @@
-.PHONY: test run lint fix build
+.PHONY: test run lint fix build vuln
 
 lint:
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run ./...
 
+
 fix:
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run --fix ./...
+
+
+vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 test:
 	@go test -v -race -count=5 ./...
