@@ -18,9 +18,10 @@ jobs:
     steps:
       - id: govulncheck
         uses: golang/govulncheck-action@v1
+
         with:
           go-version-input: 1.23
-          go-package: ./...
+          go-package: ./server/...
 
   test_job:
     name: test
