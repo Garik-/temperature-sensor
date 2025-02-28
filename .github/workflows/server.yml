@@ -40,7 +40,7 @@ jobs:
         working-directory: ./server
 
   vuln_job:
-    name: lint
+    name: vuln
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
