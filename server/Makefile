@@ -1,4 +1,15 @@
-.PHONY: test run lint fix build vuln tidy
+.PHONY: test run lint fix build vuln tidy clean
+
+GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+GIT_HASH ?= $(shell git rev-parse --short HEAD)
+
+VERSION = $(GIT_BRANCH)-$(GIT_HASH)
+GO_LDFLAGS = -ldflags="-w -s -X 'main.Version=$(VERSION)'"
+
+BINDIR = $(CURDIR)/bin
+APP = temperature-sensor
+
+ARCHS = arm64 arm
 
 tidy:
 	@go mod tidy
@@ -6,10 +17,8 @@ tidy:
 lint: tidy
 	@go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run ./...
 
-
 fix: tidy
 	@go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run --fix ./...
-
 
 vuln: tidy
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
@@ -21,7 +30,10 @@ run: tidy
 	@go run .
 
 build: tidy
-	@CGO_ENABLED=0 go build -o bin/server -ldflags '-w -s' .
-	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/server-arm64 -ldflags '-w -s' .
-	@CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -o bin/server-arm -ldflags '-w -s' .
+	@echo "Building..."
+	@CGO_ENABLED=0 go build $(GO_LDFLAGS) -o $(BINDIR)/$(APP) .
+	@for arch in $(ARCHS); do \
+		echo "Building for $$arch..."; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build $(GO_LDFLAGS) -o $(BINDIR)/$(APP)-$$arch .; \
+	done
 	@ls -lh bin

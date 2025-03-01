@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -18,6 +19,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// set from ldflags.
+var (
+	Version = ""
+)
+
 const (
 	defaultHTTPAddr = ":8001"
 	defaultUDPPort  = ":12345"
@@ -28,7 +34,13 @@ const (
 func main() {
 	port := flag.String("port", defaultUDPPort, "UDP server port")
 	addr := flag.String("addr", defaultHTTPAddr, "HTTP server address")
+	showVersion := flag.Bool("v", false, "Show version information")
 	flag.Parse()
+
+	if *showVersion {
+		log.Println(Version)
+		os.Exit(0)
+	}
 
 	serverUDP, err := udp.Listen(*port)
 	if err != nil {
