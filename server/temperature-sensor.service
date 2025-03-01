@@ -1,0 +1,27 @@
+[Unit]
+Description=Temperature Sensor Server
+
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+LogNamespace=temperature-sensor
+Type=simple
+User=xakep
+Group=xakep
+ExecStart=/home/xakep/bin/temperature-sensor
+
+# restart if it crashes
+Restart=on-failure
+RestartSec=30
+
+CPUSchedulingPolicy=batch
+Nice=0
+
+# Sandboxing
+ProtectSystem=full
+ProtectHome=read-only
+ProtectControlGroups=on
+
+[Install]
+WantedBy=multi-user.target

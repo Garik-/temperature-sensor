@@ -37,3 +37,7 @@ build: tidy
 		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build $(GO_LDFLAGS) -o $(BINDIR)/$(APP)-$$arch .; \
 	done
 	@ls -lh bin
+
+deploy:
+	scp bin/temperature-sensor-arm64 xakep@raspberrypi.local:/home/xakep/bin/temperature-sensor
+	scp temperature-sensor.service xakep@raspberrypi.local:/home/xakep/bin/

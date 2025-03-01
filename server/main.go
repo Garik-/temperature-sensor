@@ -21,7 +21,7 @@ import (
 
 // set from ldflags.
 var (
-	Version = ""
+	Version = "" //nolint:gochecknoglobals
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 	clearInterval   = 1 * 24 * time.Hour
 )
 
-func main() {
+func main() { //nolint:funlen
 	port := flag.String("port", defaultUDPPort, "UDP server port")
 	addr := flag.String("addr", defaultHTTPAddr, "HTTP server address")
 	showVersion := flag.Bool("v", false, "Show version information")
