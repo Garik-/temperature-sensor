@@ -122,7 +122,10 @@
                 },
                 series: temperatureSeries([]),
                 tooltip: {
-                    theme: 'dark'
+                    theme: 'dark',
+                    x: {
+                        format: 'dd.MM.yyyy HH:mm'
+                    }
                 },
                 grid: {
                     strokeDashArray: 4,
@@ -184,7 +187,10 @@
                 },
                 series: pressureSeres([]),
                 tooltip: {
-                    theme: 'dark'
+                    theme: 'dark',
+                    x: {
+                        format: 'dd.MM.yyyy HH:mm'
+                    }
                 },
                 grid: {
                     strokeDashArray: 4,
@@ -242,6 +248,11 @@
                 progressBarHumiditySpan.textContent = label;
             }
 
+            const lastChart = {
+                temperature: 0,
+                pressure: 0,
+            };
+
             const onEvent = (state) => {
                 const { current, chart } = state;
                 console.log(current);
@@ -252,8 +263,15 @@
 
                 updateProgressBar(current.humidity);
 
-                temperatureChart.updateSeries(temperatureSeries(chart.temperature));
-                pressureChart.updateSeries(pressureSeres(chart.pressure));
+                if (lastChart.temperature < chart.temperature.length) {
+                    temperatureChart.updateSeries(temperatureSeries(chart.temperature));
+                    lastChart.temperature = chart.temperature.length;
+                }
+
+                if (lastChart.pressure < chart.pressure.length) {
+                    pressureChart.updateSeries(pressureSeres(chart.pressure));
+                    lastChart.pressure = chart.pressure.length;
+                }
             }
 
             // init
