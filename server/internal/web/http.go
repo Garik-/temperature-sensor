@@ -29,6 +29,7 @@ type stats interface {
 type eventEmitter interface {
 	Subscribe() chan packet.Packet
 	Unsubscribe(ch chan packet.Packet)
+	Emit(data packet.Packet)
 }
 
 type eventResponse struct {
@@ -70,6 +71,8 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 
 		ch := emitter.Subscribe()
 		defer emitter.Unsubscribe(ch)
+
+		emitter.Emit(s.Current())
 
 		ctx := r.Context()
 		encoder := json.NewEncoder(w)
