@@ -38,6 +38,9 @@ build: tidy
 	done
 	@ls -lh bin
 
-deploy:
+deploy: build
+	ssh xakep@raspberrypi.local "sudo systemctl stop temperature-sensor"
 	scp bin/temperature-sensor-arm64 xakep@raspberrypi.local:/home/xakep/bin/temperature-sensor
 	scp temperature-sensor.service xakep@raspberrypi.local:/home/xakep/bin/
+	ssh xakep@raspberrypi.local "sudo systemctl start temperature-sensor"
+	ssh xakep@raspberrypi.local "sudo systemctl status temperature-sensor"

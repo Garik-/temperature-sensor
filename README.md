@@ -26,7 +26,7 @@ systemctl start temperature-sensor
 check
 ```sh
 systemctl status temperature-sensor
-journalctl -u temperature-sensor -f
+journalctl --namespace=temperature-sensor -f
 ```
 
 ## List of components
