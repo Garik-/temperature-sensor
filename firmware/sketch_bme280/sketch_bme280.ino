@@ -12,14 +12,14 @@
 #define BME_ADDR 0x76 // Адрес BME280 по умолчанию 0x76 (может быть 0x77)
 
 #define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP 5           /* Time ESP32 will go to sleep (in seconds) */
+#define TIME_TO_SLEEP 60           /* Time ESP32 will go to sleep (in seconds) */
 
 #define PACKETS_COUNT 5
 #define PACKETS_INTERVAL 500
 
 #define WIFI_CONNECTED(x) digitalWrite(LED_BUILTIN, !x);
 
-// #define DEBUG
+#define DEBUG 1
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
 #define DEBUG_PRINTLN(x) Serial.println(x)
@@ -42,6 +42,11 @@ Adafruit_BME280 bme;
 
 void enterDeepSleep()
 {
+  if (TIME_TO_SLEEP == 0)
+  {
+    return;
+  }
+
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
   DEBUG_PRINTLN("Entering Deep Sleep for " + String(TIME_TO_SLEEP) + " seconds");
 
@@ -101,13 +106,24 @@ bool connectToWiFi(const char *ssid, const char *password)
   setWifiConnected(false);
 
   WiFi.mode(WIFI_STA);
+  IPAddress local_IP(192, 168, 1, 11);
+  IPAddress gateway(192, 168, 1, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  WiFi.config(local_IP, gateway, subnet);
+
   WiFi.begin(ssid, password);
+
+  int rssi = WiFi.RSSI();
+  DEBUG_PRINT("RSSI: ");
+  DEBUG_PRINTLN(rssi);
 
   DEBUG_PRINTLN("Waiting for WIFI connection...");
 
   if (WiFi.waitForConnectResult() != WL_CONNECTED)
   {
-    DEBUG_PRINTLN("WiFi Failed");
+    wl_status_t status = WiFi.status();
+    DEBUG_PRINT("Connection failed with status: ");
+    DEBUG_PRINTLN(status);
     return false;
   }
 
@@ -137,14 +153,21 @@ void setup()
 
   pinMode(LED_BUILTIN, OUTPUT);
 
-  if (connectToWiFi(ssid, password))
+  while (!connectToWiFi(ssid, password))
   {
-    sendDataTask();
+    delay(200);
   }
 
-  WiFi.disconnect(true);
-  setWifiConnected(false);
+  sendDataTask();
 
+  while (!WiFi.disconnect(true))
+  {
+    delay(200);
+  }
+
+  DEBUG_PRINTLN("Wifi disconnected");
+
+  setWifiConnected(false);
   pinMode(LED_BUILTIN, INPUT);
 
   enterDeepSleep();
