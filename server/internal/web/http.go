@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	iofs "io/fs"
-	"log"
 	"net"
 	"net/http"
 	"text/template"
@@ -29,7 +28,6 @@ type stats interface {
 type eventEmitter interface {
 	Subscribe() chan packet.Packet
 	Unsubscribe(ch chan packet.Packet)
-	Emit(data packet.Packet)
 }
 
 type eventResponse struct {
@@ -43,6 +41,8 @@ var publicFiles embed.FS
 //go:embed templates
 var templateFiles embed.FS
 
+var errStreamUnsupported = errors.New("streaming unsupported")
+
 func newServer(ctx context.Context, addr string) *http.Server {
 	return &http.Server{
 		ReadHeaderTimeout: readHeaderTimeout,
@@ -51,6 +51,31 @@ func newServer(ctx context.Context, addr string) *http.Server {
 			return ctx
 		},
 	}
+}
+
+func sendResponse(w http.ResponseWriter, response *eventResponse) error {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return errStreamUnsupported
+	}
+
+	if _, err := fmt.Fprintf(w, "data: "); err != nil {
+		return fmt.Errorf("error writing to client: %w", err)
+	}
+
+	encoder := json.NewEncoder(w)
+
+	if err := encoder.Encode(response); err != nil {
+		return fmt.Errorf("error encoding JSON: %w", err)
+	}
+
+	if _, err := fmt.Fprint(w, "\n\n"); err != nil {
+		return fmt.Errorf("error writing to client: %w", err)
+	}
+
+	flusher.Flush()
+
+	return nil
 }
 
 func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
@@ -62,49 +87,32 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		ch := emitter.Subscribe()
+		defer emitter.Unsubscribe(ch)
+
+		ctx := r.Context()
+		current := s.Current()
+
+		if err := sendResponse(w, &eventResponse{
+			Current: &current,
+			Chart:   s.Series(),
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 
 			return
 		}
 
-		ch := emitter.Subscribe()
-		defer emitter.Unsubscribe(ch)
-
-		emitter.Emit(s.Current())
-
-		ctx := r.Context()
-		encoder := json.NewEncoder(w)
-
 		for {
 			select {
 			case data := <-ch:
-				response := eventResponse{
+				if err := sendResponse(w, &eventResponse{
 					Current: &data,
 					Chart:   s.Series(),
-				}
-
-				if _, err := fmt.Fprintf(w, "data: "); err != nil {
-					log.Printf("Error writing to client: %v\n", err)
+				}); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
 
 					return
 				}
-
-				if err := encoder.Encode(response); err != nil {
-					log.Printf("Error encoding JSON: %v\n", err)
-
-					return
-				}
-
-				if _, err := fmt.Fprint(w, "\n\n"); err != nil {
-					fmt.Printf("Error writing to client: %v\n", err)
-
-					return
-				}
-
-				flusher.Flush()
-
 			case <-ctx.Done():
 				return
 			}
