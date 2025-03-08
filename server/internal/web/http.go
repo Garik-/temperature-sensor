@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	iofs "io/fs"
+	"log"
 	"net"
 	"net/http"
 	"text/template"
@@ -97,6 +98,7 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 			Current: &current,
 			Chart:   s.Series(),
 		}); err != nil {
+			log.Println(err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 
 			return
@@ -109,6 +111,7 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 					Current: &data,
 					Chart:   s.Series(),
 				}); err != nil {
+					log.Println(err.Error())
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 
 					return
@@ -150,7 +153,9 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 
 		jsonData, err := json.Marshal(response)
 		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			log.Println(err.Error())
+
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 
 			return
 		}
@@ -163,7 +168,8 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 
 		err = tmpl.Execute(w, data)
 		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			log.Println(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
