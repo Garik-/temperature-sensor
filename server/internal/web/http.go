@@ -111,7 +111,6 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 		for {
 			select {
 			case data := <-ch:
-
 				response := eventResponse{
 					Current: &data,
 					Chart:   s.Series(),
