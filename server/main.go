@@ -69,7 +69,7 @@ func main() { //nolint:funlen
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return serverUDP.Subscribe(ctx, emitter)
+		return serverUDP.Listen(ctx, emitter)
 	})
 
 	g.Go(func() error {

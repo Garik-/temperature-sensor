@@ -22,18 +22,12 @@ const (
 )
 
 type stats interface {
-	Series() *dataset.Series
-	Current() packet.Packet
+	EventResponse() *dataset.EventResponse
 }
 
 type eventEmitter interface {
 	Subscribe() chan packet.Packet
 	Unsubscribe(ch chan packet.Packet)
-}
-
-type eventResponse struct {
-	Current *packet.Packet  `json:"current"`
-	Chart   *dataset.Series `json:"chart"`
 }
 
 //go:embed public
@@ -54,7 +48,7 @@ func newServer(ctx context.Context, addr string) *http.Server {
 	}
 }
 
-func sendResponse(w http.ResponseWriter, response *eventResponse) error {
+func sendResponse(w http.ResponseWriter, response *dataset.EventResponse) error {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		return errStreamUnsupported
@@ -92,16 +86,8 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 		defer emitter.Unsubscribe(ch)
 
 		ctx := r.Context()
-		current := s.Current()
 
-		response := eventResponse{
-			Current: &current,
-			Chart:   s.Series(),
-		}
-
-		log.Printf("response=%+v\n", response)
-
-		if err := sendResponse(w, &response); err != nil {
+		if err := sendResponse(w, s.EventResponse()); err != nil {
 			log.Println(err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 
@@ -110,15 +96,8 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 
 		for {
 			select {
-			case data := <-ch:
-				response := eventResponse{
-					Current: &data,
-					Chart:   s.Series(),
-				}
-
-				log.Printf("response=%+v\n", response)
-
-				if err := sendResponse(w, &response); err != nil {
+			case <-ch:
+				if err := sendResponse(w, s.EventResponse()); err != nil {
 					log.Println(err.Error())
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 
@@ -153,15 +132,7 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 			return
 		}
 
-		current := s.Current()
-		response := eventResponse{
-			Current: &current,
-			Chart:   s.Series(),
-		}
-
-		log.Printf("response=%+v\n", response)
-
-		jsonData, err := json.Marshal(response)
+		jsonData, err := json.Marshal(s.EventResponse())
 		if err != nil {
 			log.Println(err.Error())
 

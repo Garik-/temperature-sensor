@@ -24,6 +24,11 @@ type Stats struct {
 	packet      safePacket
 }
 
+type EventResponse struct {
+	Current packet.Packet `json:"current"`
+	Chart   *Series       `json:"chart"`
+}
+
 type Series struct {
 	Temperature timeSeries `json:"temperature"`
 	Pressure    timeSeries `json:"pressure"`
@@ -80,4 +85,11 @@ func (s *Stats) Clear(ctx context.Context, interval time.Duration) error {
 
 func (s *Stats) Current() packet.Packet {
 	return s.packet.Get()
+}
+
+func (s *Stats) EventResponse() *EventResponse {
+	return &EventResponse{
+		Current: s.Current(),
+		Chart:   s.Series(),
+	}
 }

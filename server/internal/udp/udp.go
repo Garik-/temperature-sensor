@@ -45,7 +45,7 @@ type eventEmitter interface {
 	Emit(pack packet.Packet)
 }
 
-func (s *Service) Subscribe(ctx context.Context, emitter eventEmitter) error {
+func (s *Service) Listen(ctx context.Context, emitter eventEmitter) error {
 	buf := make([]byte, maxUDPSafeSize)
 
 	for {
