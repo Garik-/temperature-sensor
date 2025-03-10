@@ -35,7 +35,7 @@ type Packet struct {
 	Temperature float32   `json:"temperature"`
 	Humidity    float32   `json:"humidity"`
 	Pressure    float32   `json:"pressure"`
-	Timestamp   time.Time `json:"-"`
+	Timestamp   time.Time `json:"timestamp"`
 }
 
 func EncodePacket(data []byte, p *Packet) error {
