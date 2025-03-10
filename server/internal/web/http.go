@@ -94,10 +94,14 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 		ctx := r.Context()
 		current := s.Current()
 
-		if err := sendResponse(w, &eventResponse{
+		response := eventResponse{
 			Current: &current,
 			Chart:   s.Series(),
-		}); err != nil {
+		}
+
+		log.Printf("response=%+v\n", response)
+
+		if err := sendResponse(w, &response); err != nil {
 			log.Println(err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 
@@ -107,10 +111,15 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 		for {
 			select {
 			case data := <-ch:
-				if err := sendResponse(w, &eventResponse{
+
+				response := eventResponse{
 					Current: &data,
 					Chart:   s.Series(),
-				}); err != nil {
+				}
+
+				log.Printf("response=%+v\n", response)
+
+				if err := sendResponse(w, &response); err != nil {
 					log.Println(err.Error())
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 
@@ -151,6 +160,8 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 			Chart:   s.Series(),
 		}
 
+		log.Printf("response=%+v\n", response)
+
 		jsonData, err := json.Marshal(response)
 		if err != nil {
 			log.Println(err.Error())
@@ -165,6 +176,8 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 		}{
 			JSONData: string(jsonData),
 		}
+
+		log.Printf("data=%+v\n", data)
 
 		err = tmpl.Execute(w, data)
 		if err != nil {

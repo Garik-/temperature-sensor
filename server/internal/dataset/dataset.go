@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"math"
+	"slices"
 	"sync"
 	"time"
 )
@@ -82,8 +83,16 @@ func (d *setOfData) timeSeries() timeSeries {
 
 	series := timeSeries{}
 
-	for timestamp, data := range d.data {
+	timestamps := make([]int64, 0, len(d.data))
+	for timestamp := range d.data {
+		timestamps = append(timestamps, timestamp)
+	}
+
+	slices.Sort(timestamps)
+
+	for _, timestamp := range timestamps {
 		bod := time.UnixMilli(timestamp)
+		data := d.data[timestamp]
 
 		if data.morningCount > 0 {
 			val := []any{
@@ -105,7 +114,7 @@ func (d *setOfData) timeSeries() timeSeries {
 
 		if data.eveningCount > 0 {
 			val := []any{
-				bod.Add(20 * time.Hour).UnixMilli(),
+				bod.Add(19 * time.Hour).UnixMilli(),
 				toFixed(data.eveningSum / data.eveningCount),
 			}
 
