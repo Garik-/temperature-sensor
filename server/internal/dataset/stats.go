@@ -25,8 +25,8 @@ type Stats struct {
 }
 
 type EventResponse struct {
-	Current packet.Packet `json:"current"`
 	Chart   *Series       `json:"chart"`
+	Current packet.Packet `json:"current"`
 }
 
 type Series struct {

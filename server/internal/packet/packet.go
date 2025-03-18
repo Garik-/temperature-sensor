@@ -32,10 +32,10 @@ func (sp *SafePacket) Get() Packet {
 }
 
 type Packet struct {
+	Timestamp   time.Time `json:"timestamp"`
 	Temperature float32   `json:"temperature"`
 	Humidity    float32   `json:"humidity"`
 	Pressure    float32   `json:"pressure"`
-	Timestamp   time.Time `json:"timestamp"`
 }
 
 func EncodePacket(data []byte, p *Packet) error {

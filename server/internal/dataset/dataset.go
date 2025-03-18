@@ -19,8 +19,8 @@ type aggregatedData struct {
 type dailyAggregatedData map[int64]aggregatedData
 
 type setOfData struct {
-	mu   sync.RWMutex
 	data dailyAggregatedData
+	mu   sync.RWMutex
 }
 
 func (d *setOfData) push(value float32, timestamp time.Time) {
