@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <WiFiUDP.h>
 #include <secrets.h>
+#include <assert.h>
 
 #ifndef SECRETS_H
 const char *ssid = "";                    // Замените на ваш SSID
@@ -30,9 +31,11 @@ const int udpPort = 12345;                // Порт UDP-сервера
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
 #define DEBUG_PRINTLN(x) Serial.println(x)
+#define DEBUG_PRINTF(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__)
 #else
 #define DEBUG_PRINT(x)
 #define DEBUG_PRINTLN(x)
+#define DEBUG_PRINTF(fmt, ...)
 #endif
 
 #pragma pack(push, 1)
@@ -55,7 +58,7 @@ void enterDeepSleep()
   }
 
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
-  DEBUG_PRINTLN("Entering Deep Sleep for " + String(TIME_TO_SLEEP) + " seconds");
+  DEBUG_PRINTF("Entering Deep Sleep for %d seconds\n", TIME_TO_SLEEP);
 
 #ifdef DEBUG
   Serial.flush();
@@ -63,23 +66,14 @@ void enterDeepSleep()
   esp_deep_sleep_start();
 }
 
-// Функция для отправки данных и перехода в сон
-bool sendData()
+inline bool sendData(const void *buffer, size_t size)
 {
+  if (!buffer)
+    return false;
+
   if (udp.beginPacket(udpAddress, udpPort))
   {
-    struct SensorData data;
-    data.temperature = bme.readTemperature();
-    data.humidity = bme.readHumidity();
-    data.pressure = bme.readPressure();
-
-#if DEBUG
-    DEBUG_PRINT(" temperature=" + String(data.temperature));
-    DEBUG_PRINT(" humidity=" + String(data.humidity));
-    DEBUG_PRINTLN(" pressure=" + String(data.pressure));
-#endif
-
-    udp.write((uint8_t *)&data, sizeof(data));
+    udp.write(static_cast<const uint8_t *>(buffer), size);
     return udp.endPacket();
   }
 
@@ -88,10 +82,19 @@ bool sendData()
 
 void sendDataTask()
 {
+  struct SensorData data;
   int packetCounter = 0;
   while (packetCounter < PACKETS_COUNT)
   {
-    if (sendData())
+    data.temperature = bme.readTemperature();
+    data.humidity = bme.readHumidity();
+    data.pressure = bme.readPressure();
+
+#if DEBUG
+    DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f\n", data.temperature, data.humidity, data.pressure);
+#endif
+
+    if (sendData(&data, sizeof(data)))
     {
       packetCounter++;
       delay(PACKETS_INTERVAL);
@@ -108,7 +111,10 @@ inline void setWifiConnected(bool flag)
 
 bool connectToWiFi(const char *ssid, const char *password)
 {
-  DEBUG_PRINTLN("Connecting to WiFi network: " + String(ssid));
+  assert(ssid != nullptr);
+  assert(password != nullptr);
+
+  DEBUG_PRINTF("Connecting to WiFi network: %s\n", ssid);
 
   setWifiConnected(false);
 
@@ -126,7 +132,7 @@ bool connectToWiFi(const char *ssid, const char *password)
 
   DEBUG_PRINTLN("Waiting for WIFI connection...");
 
-  if (WiFi.waitForConnectResult() != WL_CONNECTED)
+  if (WiFi.waitForConnectResult(60000UL) != WL_CONNECTED)
   {
     wl_status_t status = WiFi.status();
     DEBUG_PRINT("Connection failed with status: ");
@@ -167,12 +173,10 @@ void setup()
 
   sendDataTask();
 
-  while (!WiFi.disconnect(true))
+  if (WiFi.disconnect(true, false, 60000UL))
   {
-    delay(200);
+    DEBUG_PRINTLN("Wifi disconnected");
   }
-
-  DEBUG_PRINTLN("Wifi disconnected");
 
   setWifiConnected(false);
   pinMode(LED_BUILTIN, INPUT);
