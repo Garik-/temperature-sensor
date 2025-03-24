@@ -5,6 +5,13 @@
 #include <WiFiUDP.h>
 #include <secrets.h>
 
+#ifndef SECRETS_H
+const char *ssid = "";                    // Замените на ваш SSID
+const char *password = "";                // Замените на ваш пароль
+const char *udpAddress = "192.168.1.255"; // Широковещательный адрес
+const int udpPort = 12345;                // Порт UDP-сервера
+#endif
+
 #define LED_BUILTIN 8 // Internal LED pin is 8 as per schematic
 
 #define BME_SDA 5     // GPIO 5 (SDA)
@@ -12,7 +19,7 @@
 #define BME_ADDR 0x76 // Адрес BME280 по умолчанию 0x76 (может быть 0x77)
 
 #define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP 60           /* Time ESP32 will go to sleep (in seconds) */
+#define TIME_TO_SLEEP 60          /* Time ESP32 will go to sleep (in seconds) */
 
 #define PACKETS_COUNT 5
 #define PACKETS_INTERVAL 500
