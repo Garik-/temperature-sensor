@@ -4,7 +4,6 @@
 #include <WiFi.h>
 #include <WiFiUDP.h>
 #include <secrets.h>
-#include <assert.h>
 
 #ifndef SECRETS_H
 const char *ssid = "";                    // Замените на ваш SSID
@@ -19,13 +18,12 @@ const int udpPort = 12345;                // Порт UDP-сервера
 #define BME_SCL 6     // GPIO 6 (SCL)
 #define BME_ADDR 0x76 // Адрес BME280 по умолчанию 0x76 (может быть 0x77)
 
-#define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP 60          /* Time ESP32 will go to sleep (in seconds) */
+#define uS_TO_S_FACTOR 1000000ULL   /* Conversion factor for micro seconds to seconds */
+#define TIME_TO_SLEEP 60            /* Time ESP32 will go to sleep (in seconds) */
+#define WAIT_STATUS_TIMEOUT 60000UL /* Timeout for waiting for status WiFi connection */
 
 #define PACKETS_COUNT 5
 #define PACKETS_INTERVAL 500
-
-#define WIFI_CONNECTED(x) digitalWrite(LED_BUILTIN, !x);
 
 #define DEBUG 1
 #if DEBUG
@@ -80,19 +78,24 @@ inline bool sendData(const void *buffer, size_t size)
   return false;
 }
 
+inline void readSensor(SensorData &data)
+{
+  data.temperature = bme.readTemperature();
+  data.humidity = bme.readHumidity();
+  data.pressure = bme.readPressure();
+
+#if DEBUG
+  DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f\n", data.temperature, data.humidity, data.pressure);
+#endif
+}
+
 void sendDataTask()
 {
   struct SensorData data;
-  int packetCounter = 0;
-  while (packetCounter < PACKETS_COUNT)
-  {
-    data.temperature = bme.readTemperature();
-    data.humidity = bme.readHumidity();
-    data.pressure = bme.readPressure();
 
-#if DEBUG
-    DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f\n", data.temperature, data.humidity, data.pressure);
-#endif
+  for (int packetCounter = 0; packetCounter < PACKETS_COUNT;)
+  {
+    readSensor(data);
 
     if (sendData(&data, sizeof(data)))
     {
@@ -111,9 +114,6 @@ inline void setWifiConnected(bool flag)
 
 bool connectToWiFi(const char *ssid, const char *password)
 {
-  assert(ssid != nullptr);
-  assert(password != nullptr);
-
   DEBUG_PRINTF("Connecting to WiFi network: %s\n", ssid);
 
   setWifiConnected(false);
@@ -132,7 +132,7 @@ bool connectToWiFi(const char *ssid, const char *password)
 
   DEBUG_PRINTLN("Waiting for WIFI connection...");
 
-  if (WiFi.waitForConnectResult(60000UL) != WL_CONNECTED)
+  if (WiFi.waitForConnectResult(WAIT_STATUS_TIMEOUT) != WL_CONNECTED)
   {
     wl_status_t status = WiFi.status();
     DEBUG_PRINT("Connection failed with status: ");
@@ -173,7 +173,7 @@ void setup()
 
   sendDataTask();
 
-  if (WiFi.disconnect(true, false, 60000UL))
+  if (WiFi.disconnect(true, false, WAIT_STATUS_TIMEOUT))
   {
     DEBUG_PRINTLN("Wifi disconnected");
   }
