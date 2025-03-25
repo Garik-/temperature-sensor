@@ -45,11 +45,11 @@ struct SensorData
   float humidity{};
   float pressure{};
 
-  [[nodiscard]] bool isValid() const noexcept
+  [[nodiscard]] bool isValid() const
   {
-    return !std::isnan(temperature) &&
-           !std::isnan(humidity) &&
-           !std::isnan(pressure);
+    return (temperature == temperature) &&
+           (humidity == humidity) &&
+           (pressure == pressure);
   }
 };
 #pragma pack(pop)
@@ -57,7 +57,7 @@ struct SensorData
 WiFiUDP udp;
 Adafruit_BME280 bme;
 
-void enterDeepSleep() noexcept
+void enterDeepSleep()
 {
   if (TIME_TO_SLEEP == 0)
   {
@@ -79,7 +79,7 @@ void enterDeepSleep() noexcept
  * @param size Size of data in bytes
  * @return true if sending was successful, false otherwise
  */
-[[nodiscard]] inline bool sendData(const void *buffer, size_t size) noexcept
+[[nodiscard]] inline bool sendData(const void *buffer, size_t size)
 {
   if (buffer == nullptr)
   {
@@ -101,7 +101,7 @@ void enterDeepSleep() noexcept
   return udp.endPacket();
 }
 
-inline bool readSensor(SensorData &data) noexcept
+inline bool readSensor(SensorData &data)
 {
   data.temperature = bme.readTemperature();
   data.humidity = bme.readHumidity();
@@ -114,7 +114,7 @@ inline bool readSensor(SensorData &data) noexcept
   return data.isValid();
 }
 
-void sendDataTask() noexcept
+void sendDataTask()
 {
   SensorData data{};
   for (uint8_t packetCounter = 0; packetCounter < PACKETS_COUNT;)
@@ -138,12 +138,12 @@ void sendDataTask() noexcept
   udp.flush();
 }
 
-inline void setWifiConnected(bool flag) noexcept
+inline void setWifiConnected(bool flag)
 {
   digitalWrite(LED_STATUS, !flag);
 }
 
-[[nodiscard]] bool connectToWiFi(const char *ssid, const char *password, unsigned long timeoutLength) noexcept
+[[nodiscard]] bool connectToWiFi(const char *ssid, const char *password, unsigned long timeoutLength)
 {
   if (!ssid || !password)
   {
