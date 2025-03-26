@@ -10,7 +10,7 @@ constexpr uint8_t LED_STATUS = 8; // Internal LED pin is 8 as per schematic
 
 class WiFiHandler
 {
-    static constexpr uint32_t WAIT_STATUS_TIMEOUT = 5000UL; /* Timeout for waiting for status WiFi connection */
+    static constexpr uint32_t WAIT_STATUS_TIMEOUT = 5000; /* Timeout for waiting for status WiFi connection */
 
     inline void setWifiConnected(bool flag);
 
