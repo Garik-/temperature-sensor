@@ -19,61 +19,8 @@ constexpr uint8_t BME_PWR = 4;     // GPIO 4 (HIGH)
 
 constexpr uint8_t BAT_ACC = 3;
 
-constexpr uint64_t uS_TO_S_FACTOR = 1000000ULL;   /* Conversion factor for micro seconds to seconds */
-constexpr uint32_t TIME_TO_SLEEP = 60;            /* Time ESP32 will go to sleep (in seconds) */
-constexpr uint32_t WAIT_STATUS_TIMEOUT = 60000UL; /* Timeout for waiting for status WiFi connection */
-
-#pragma pack(push, 1)
-// Структура пакета для отправки
-struct NetworkPacket
-{
-  static constexpr uint8_t MAGIC_START = 0xAA; // Маркер начала
-  static constexpr uint8_t MAGIC_END = 0x55;   // Маркер конца
-  static constexpr uint16_t VERSION = 1;       // Версия протокола
-
-  // Заголовок пакета
-  struct Header
-  {
-    uint8_t startMarker = MAGIC_START; // Начало пакета
-    uint16_t version = VERSION;        // Версия
-    uint16_t dataSize = 0;             // Размер данных
-                                       // uint32_t sequence = 0;             // Номер пакета
-                                       // uint8_t dataType = 0;              // Тип данных
-                                       // uint8_t flags = 0;                 // Флаги
-  } header;
-
-  // Данные
-  SensorData data;
-
-  // CRC
-  uint16_t crc = 0;
-  uint8_t endMarker = MAGIC_END;
-
-  // Вычисление CRC16
-  [[nodiscard]] uint16_t calculateCRC() const
-  {
-    const uint8_t *bytes = reinterpret_cast<const uint8_t *>(this);
-    return crc16_le(0, bytes, sizeof(Header) + sizeof(SensorData));
-  }
-
-  // Подготовка пакета
-  void prepare(const SensorData &sensorData)
-  {
-    header.dataSize = sizeof(SensorData);
-    data = sensorData;
-    crc = calculateCRC();
-  }
-
-  // Проверка целостности
-  [[nodiscard]] bool isValid() const
-  {
-    return header.startMarker == MAGIC_START &&
-           endMarker == MAGIC_END &&
-           header.version == VERSION &&
-           crc == calculateCRC();
-  }
-};
-#pragma pack(pop)
+constexpr uint64_t uS_TO_S_FACTOR = 1000000ULL; /* Conversion factor for micro seconds to seconds */
+constexpr uint32_t TIME_TO_SLEEP = 60;          /* Time ESP32 will go to sleep (in seconds) */
 
 void enterDeepSleep()
 {
@@ -91,56 +38,92 @@ void enterDeepSleep()
   esp_deep_sleep_start();
 }
 
-inline void setWifiConnected(bool flag)
+RTC_DATA_ATTR static uint8_t lastChannel = 0;
+RTC_DATA_ATTR static uint8_t lastBSSID[6] = {0};
+
+class WiFiHandler
 {
-  digitalWrite(LED_STATUS, !flag);
-}
+  static constexpr uint32_t WAIT_STATUS_TIMEOUT = 5000UL; /* Timeout for waiting for status WiFi connection */
 
-[[nodiscard]] bool connectToWiFi(const char *ssid, const char *password, unsigned long timeoutLength)
-{
-  if (!ssid || !password)
+  inline void setWifiConnected(bool flag)
   {
-    DEBUG_PRINTLN("Invalid WiFi credentials");
-    return false;
+    if (flag)
+    {
+      pinMode(LED_STATUS, OUTPUT);
+      digitalWrite(LED_STATUS, LOW);
+    }
+    else
+    {
+      digitalWrite(LED_STATUS, HIGH);
+      pinMode(LED_STATUS, INPUT);
+    }
   }
 
-  DEBUG_PRINTF("Connecting to WiFi network: %s\n", ssid);
-
-  setWifiConnected(false);
-
-  WiFi.mode(WIFI_STA);
-
-  const IPAddress local_IP(192, 168, 1, 11);
-  const IPAddress gateway(192, 168, 1, 1);
-  const IPAddress subnet(255, 255, 255, 0);
-
-  if (!WiFi.config(local_IP, gateway, subnet))
+public:
+  [[nodiscard]] bool begin(const char *ssid, const char *password)
   {
-    DEBUG_PRINTLN("WiFi configuration failed");
-    return false;
+    if (!ssid || !password)
+    {
+      DEBUG_PRINTLN("Invalid WiFi credentials");
+      return false;
+    }
+
+    DEBUG_PRINTF("Connecting to WiFi network: %s\n", ssid);
+
+    setWifiConnected(false);
+
+    WiFi.mode(WIFI_STA);
+    WiFi.setTxPower(WIFI_POWER_11dBm);
+
+    const IPAddress local_IP(192, 168, 1, 11);
+    const IPAddress gateway(192, 168, 1, 1);
+    const IPAddress subnet(255, 255, 255, 0);
+
+    if (!WiFi.config(local_IP, gateway, subnet))
+    {
+      DEBUG_PRINTLN("WiFi configuration failed");
+      return false;
+    }
+
+    if (lastChannel > 0) // TODO: если перезагрузить роутер надо устройство рестартовать
+    {
+      WiFi.begin(ssid, password, lastChannel, lastBSSID);
+    }
+    else
+    {
+      WiFi.begin(ssid, password);
+    }
+
+    DEBUG_PRINTLN("Waiting for WIFI connection...");
+
+    if (WiFi.waitForConnectResult(WAIT_STATUS_TIMEOUT) != WL_CONNECTED)
+    {
+      DEBUG_PRINTF("Connection failed with status: %d\n", WiFi.status());
+      return false;
+    }
+
+    DEBUG_PRINTF("Connected, IP: %s\n", WiFi.localIP().toString().c_str());
+
+    WiFi.setSleep(true);
+    setWifiConnected(true);
+
+    lastChannel = WiFi.channel();
+    memcpy(lastBSSID, WiFi.BSSID(), sizeof(lastBSSID));
+
+    return true;
   }
 
-  WiFi.begin(ssid, password);
-
-  if (const int8_t rssi = WiFi.RSSI(); rssi != 0)
+  void end()
   {
-    DEBUG_PRINTF("RSSI: %d\n", rssi);
+    if (WiFi.disconnect(true, false, WAIT_STATUS_TIMEOUT))
+    {
+      DEBUG_PRINTLN("Wifi disconnected");
+    }
+
+    setWifiConnected(false);
+    WiFi.mode(WIFI_OFF);
   }
-
-  DEBUG_PRINTLN("Waiting for WIFI connection...");
-
-  if (WiFi.waitForConnectResult(timeoutLength) != WL_CONNECTED)
-  {
-    DEBUG_PRINTF("Connection failed with status: %d\n", WiFi.status());
-    return false;
-  }
-
-  DEBUG_PRINTF("Connected, IP: %s\n", WiFi.localIP().toString().c_str());
-
-  setWifiConnected(true);
-
-  return true;
-}
+};
 
 void sendDataTask(BME280Handler &bme)
 {
@@ -149,7 +132,6 @@ void sendDataTask(BME280Handler &bme)
 
   UDPBroadcast broadcast;
   SensorData data{};
-  NetworkPacket packet;
 
   for (uint8_t packetCounter = 0; packetCounter < PACKETS_COUNT;)
   {
@@ -158,9 +140,7 @@ void sendDataTask(BME280Handler &bme)
       break;
     }
 
-    packet.prepare(data);
-
-    if (broadcast.send(&packet, sizeof(packet)))
+    if (broadcast.send(&data, sizeof(data)))
     {
       packetCounter++;
       if (packetCounter < PACKETS_COUNT)
