@@ -1,15 +1,9 @@
-
-#include <WiFi.h>
-#include <WiFiUDP.h>
-#include <secrets.h>
-#include <constants.h>
-#include <esp32/rom/crc.h>
-
+#include "debug.h"
+#include "secrets.h"
 #include "SensorData.h"
 #include "BME280Handler.h"
 #include "UDPBroadcast.h"
 #include "WiFiHandler.h"
-#include "debug.h"
 
 constexpr uint8_t BME_SDA = 5;     // GPIO 5 (SDA)
 constexpr uint8_t BME_SCL = 6;     // GPIO 6 (SCL)
