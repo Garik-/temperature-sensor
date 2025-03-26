@@ -39,9 +39,10 @@ inline void WiFiHandler::setWifiConnected(bool flag)
         return false;
     }
 
-    if (lastChannel > 0) // TODO: если перезагрузить роутер надо устройство рестартовать
+    if (WiFi.channel() > 0) // TODO: если перезагрузить роутер надо устройство рестартовать
     {
-        WiFi.begin(ssid, password, lastChannel, lastBSSID);
+        DEBUG_PRINTLN("WIFI using stored config");
+        WiFi.begin();
     }
     else
     {
@@ -60,9 +61,6 @@ inline void WiFiHandler::setWifiConnected(bool flag)
 
     WiFi.setSleep(true);
     setWifiConnected(true);
-
-    lastChannel = WiFi.channel();
-    memcpy(lastBSSID, WiFi.BSSID(), sizeof(lastBSSID));
 
     return true;
 }

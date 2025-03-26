@@ -8,6 +8,7 @@
 #include "SensorData.h"
 #include "BME280Handler.h"
 #include "UDPBroadcast.h"
+#include "WiFiHandler.h"
 #include "debug.h"
 
 constexpr uint8_t BME_SDA = 5;     // GPIO 5 (SDA)
@@ -39,7 +40,7 @@ void enterDeepSleep()
 void sendDataTask(BME280Handler &bme)
 {
   constexpr uint8_t PACKETS_COUNT = 5;
-  constexpr uint32_t PACKETS_INTERVAL = 500;
+  constexpr uint32_t PACKETS_INTERVAL = 50;
 
   UDPBroadcast broadcast;
   SensorData data{};
@@ -66,6 +67,8 @@ void sendDataTask(BME280Handler &bme)
 
 void setup()
 {
+  btStop();
+
 #if DEBUG
   Serial.begin(115200);
   while (!Serial)
@@ -81,27 +84,18 @@ void setup()
       ;
   }
 
-  SensorData data{};
+  WiFiHandler wifi;
 
-  int64_t duration = 0;
-
-  for (uint8_t i = 0; i < 10; i++)
+  if (wifi.begin(ssid, password))
   {
-    int64_t start = esp_timer_get_time();
-
-    if (!bme.readSensor(data))
-    {
-      DEBUG_PRINTLN("Failed to read sensor data");
-      break;
-    }
-
-    duration += esp_timer_get_time() - start;
-
-    delay(50);
+    sendDataTask(bme);
+  }
+  else
+  {
+    DEBUG_PRINTLN("WiFi connection failed");
   }
 
-  DEBUG_PRINTF("Operation took %lld µs\n", duration / 10);
-
+  wifi.end();
   bme.end();
 }
 

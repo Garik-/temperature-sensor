@@ -6,9 +6,6 @@
 #include <WiFi.h>
 #include "debug.h"
 
-RTC_DATA_ATTR static uint8_t lastChannel = 0;
-RTC_DATA_ATTR static uint8_t lastBSSID[6] = {0};
-
 constexpr uint8_t LED_STATUS = 8; // Internal LED pin is 8 as per schematic
 
 class WiFiHandler
