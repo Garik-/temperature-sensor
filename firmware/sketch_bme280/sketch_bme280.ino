@@ -10,8 +10,6 @@
 #include "UDPBroadcast.h"
 #include "debug.h"
 
-constexpr uint8_t LED_STATUS = 8; // Internal LED pin is 8 as per schematic
-
 constexpr uint8_t BME_SDA = 5;     // GPIO 5 (SDA)
 constexpr uint8_t BME_SCL = 6;     // GPIO 6 (SCL)
 constexpr uint8_t BME_ADDR = 0x76; // Адрес BME280 по умолчанию 0x76 (может быть 0x77)
@@ -37,93 +35,6 @@ void enterDeepSleep()
 #endif
   esp_deep_sleep_start();
 }
-
-RTC_DATA_ATTR static uint8_t lastChannel = 0;
-RTC_DATA_ATTR static uint8_t lastBSSID[6] = {0};
-
-class WiFiHandler
-{
-  static constexpr uint32_t WAIT_STATUS_TIMEOUT = 5000UL; /* Timeout for waiting for status WiFi connection */
-
-  inline void setWifiConnected(bool flag)
-  {
-    if (flag)
-    {
-      pinMode(LED_STATUS, OUTPUT);
-      digitalWrite(LED_STATUS, LOW);
-    }
-    else
-    {
-      digitalWrite(LED_STATUS, HIGH);
-      pinMode(LED_STATUS, INPUT);
-    }
-  }
-
-public:
-  [[nodiscard]] bool begin(const char *ssid, const char *password)
-  {
-    if (!ssid || !password)
-    {
-      DEBUG_PRINTLN("Invalid WiFi credentials");
-      return false;
-    }
-
-    DEBUG_PRINTF("Connecting to WiFi network: %s\n", ssid);
-
-    setWifiConnected(false);
-
-    WiFi.mode(WIFI_STA);
-    WiFi.setTxPower(WIFI_POWER_11dBm);
-
-    const IPAddress local_IP(192, 168, 1, 11);
-    const IPAddress gateway(192, 168, 1, 1);
-    const IPAddress subnet(255, 255, 255, 0);
-
-    if (!WiFi.config(local_IP, gateway, subnet))
-    {
-      DEBUG_PRINTLN("WiFi configuration failed");
-      return false;
-    }
-
-    if (lastChannel > 0) // TODO: если перезагрузить роутер надо устройство рестартовать
-    {
-      WiFi.begin(ssid, password, lastChannel, lastBSSID);
-    }
-    else
-    {
-      WiFi.begin(ssid, password);
-    }
-
-    DEBUG_PRINTLN("Waiting for WIFI connection...");
-
-    if (WiFi.waitForConnectResult(WAIT_STATUS_TIMEOUT) != WL_CONNECTED)
-    {
-      DEBUG_PRINTF("Connection failed with status: %d\n", WiFi.status());
-      return false;
-    }
-
-    DEBUG_PRINTF("Connected, IP: %s\n", WiFi.localIP().toString().c_str());
-
-    WiFi.setSleep(true);
-    setWifiConnected(true);
-
-    lastChannel = WiFi.channel();
-    memcpy(lastBSSID, WiFi.BSSID(), sizeof(lastBSSID));
-
-    return true;
-  }
-
-  void end()
-  {
-    if (WiFi.disconnect(true, false, WAIT_STATUS_TIMEOUT))
-    {
-      DEBUG_PRINTLN("Wifi disconnected");
-    }
-
-    setWifiConnected(false);
-    WiFi.mode(WIFI_OFF);
-  }
-};
 
 void sendDataTask(BME280Handler &bme)
 {

@@ -2,6 +2,8 @@
 
 [[nodiscard]] bool UDPBroadcast::send(const void *buffer, size_t size)
 {
+    static IPAddress broadcastIP = WiFi.broadcastIP();
+
     if (buffer == nullptr)
     {
         return false;
@@ -12,7 +14,7 @@
         return false;
     }
 
-    if (!udp.beginPacket(WiFi.broadcastIP(), UDP_PORT))
+    if (!udp.beginPacket(broadcastIP, UDP_PORT))
     {
         return false;
     }
