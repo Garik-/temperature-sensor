@@ -1,19 +1,21 @@
-#include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
+
 #include <WiFi.h>
 #include <WiFiUDP.h>
 #include <secrets.h>
 #include <constants.h>
 #include <esp32/rom/crc.h>
 
-constexpr const uint16_t UDP_PORT = 12345; // Порт UDP-сервера
+#include "SensorData.h"
+#include "BME280Handler.h"
+#include "UDPBroadcast.h"
+#include "debug.h"
 
-constexpr uint8_t LED_STATUS = 8;  // Internal LED pin is 8 as per schematic
+constexpr uint8_t LED_STATUS = 8; // Internal LED pin is 8 as per schematic
+
 constexpr uint8_t BME_SDA = 5;     // GPIO 5 (SDA)
 constexpr uint8_t BME_SCL = 6;     // GPIO 6 (SCL)
 constexpr uint8_t BME_ADDR = 0x76; // Адрес BME280 по умолчанию 0x76 (может быть 0x77)
-constexpr uint8_t BME_PWR = 4;
+constexpr uint8_t BME_PWR = 4;     // GPIO 4 (HIGH)
 
 constexpr uint8_t BAT_ACC = 3;
 
@@ -21,32 +23,7 @@ constexpr uint64_t uS_TO_S_FACTOR = 1000000ULL;   /* Conversion factor for micro
 constexpr uint32_t TIME_TO_SLEEP = 60;            /* Time ESP32 will go to sleep (in seconds) */
 constexpr uint32_t WAIT_STATUS_TIMEOUT = 60000UL; /* Timeout for waiting for status WiFi connection */
 
-#define DEBUG 1
-#if DEBUG
-#define DEBUG_PRINT(x) Serial.print(x)
-#define DEBUG_PRINTLN(x) Serial.println(x)
-#define DEBUG_PRINTF(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__)
-#else
-#define DEBUG_PRINT(x)
-#define DEBUG_PRINTLN(x)
-#define DEBUG_PRINTF(fmt, ...)
-#endif
-
 #pragma pack(push, 1)
-struct SensorData
-{
-  float temperature{};
-  float humidity{};
-  float pressure{};
-
-  [[nodiscard]] bool isValid() const
-  {
-    return (temperature == temperature) &&
-           (humidity == humidity) &&
-           (pressure == pressure);
-  }
-};
-
 // Структура пакета для отправки
 struct NetworkPacket
 {
@@ -97,46 +74,6 @@ struct NetworkPacket
   }
 };
 #pragma pack(pop)
-
-class UDPBroadcast
-{
-  WiFiUDP udp{};
-  static constexpr size_t MAX_UDP_PACKET_SIZE = 65507;
-
-public:
-  /**
-   * @brief Sends data over UDP
-   * @param buffer Pointer to the data buffer
-   * @param size Size of data in bytes
-   * @return true if sending was successful, false otherwise
-   */
-  [[nodiscard]] bool send(const void *buffer, size_t size)
-  {
-    if (buffer == nullptr)
-    {
-      return false;
-    }
-
-    if (size == 0 || size > MAX_UDP_PACKET_SIZE)
-    {
-      return false;
-    }
-
-    if (!udp.beginPacket(WiFi.broadcastIP(), UDP_PORT))
-    {
-      return false;
-    }
-
-    udp.write(static_cast<const uint8_t *>(buffer), size);
-
-    return udp.endPacket() == 1;
-  }
-
-  void flush()
-  {
-    udp.flush();
-  }
-};
 
 void enterDeepSleep()
 {
@@ -205,72 +142,7 @@ inline void setWifiConnected(bool flag)
   return true;
 }
 
-class BME280Handler
-{
-  static constexpr uint8_t WARMUP_MS = 2; // Время на стабилизацию питания
-
-  const uint8_t powerPin;
-  const uint8_t sdaPin;
-  const uint8_t sclPin;
-  const uint8_t i2cAddr;
-
-  Adafruit_BME280 bme{};
-
-public:
-  BME280Handler(uint8_t power_pin, uint8_t sda_pin, uint8_t scl_pin, uint8_t addr)
-      : powerPin(power_pin), sdaPin(sda_pin), sclPin(scl_pin), i2cAddr(addr)
-  {
-    pinMode(powerPin, OUTPUT);
-    digitalWrite(powerPin, LOW);
-  }
-
-  bool begin()
-  {
-    digitalWrite(powerPin, HIGH);
-    delay(WARMUP_MS);
-
-    if (!(Wire.begin(sdaPin, sclPin) && bme.begin(i2cAddr)))
-    {
-      DEBUG_PRINTLN("BME280 init failed!");
-      end();
-      return false;
-    }
-
-    bme.setSampling(
-        Adafruit_BME280::MODE_NORMAL,
-        Adafruit_BME280::SAMPLING_X1,
-        Adafruit_BME280::SAMPLING_X1,
-        Adafruit_BME280::SAMPLING_X1,
-        Adafruit_BME280::FILTER_OFF,
-        Adafruit_BME280::STANDBY_MS_0_5);
-
-    return true;
-  }
-
-  [[nodiscard]] bool readSensor(SensorData &data)
-  {
-    data.temperature = bme.readTemperature();
-    data.humidity = bme.readHumidity();
-    data.pressure = bme.readPressure();
-
-#if DEBUG
-    DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f\n", data.temperature, data.humidity, data.pressure);
-#endif
-
-    return data.isValid();
-  }
-
-  void end()
-  {
-    digitalWrite(powerPin, LOW);
-    Wire.end();
-    pinMode(powerPin, INPUT);
-    pinMode(sdaPin, INPUT);
-    pinMode(sclPin, INPUT);
-  }
-};
-
-void sendDataTask(BME280Handler &bme) // TODO: не нравится мне контроль обработки ошибок
+void sendDataTask(BME280Handler &bme)
 {
   constexpr uint8_t PACKETS_COUNT = 5;
   constexpr uint32_t PACKETS_INTERVAL = 500;
@@ -301,6 +173,48 @@ void sendDataTask(BME280Handler &bme) // TODO: не нравится мне ко
   broadcast.flush();
 }
 
+void setup()
+{
+#if DEBUG
+  Serial.begin(115200);
+  while (!Serial)
+    delay(10);
+#endif
+
+  BME280Handler bme(BME_PWR, BME_SDA, BME_SCL, BME_ADDR);
+
+  if (!bme.begin())
+  {
+    DEBUG_PRINTLN("Could not find a valid BME280 sensor, check wiring!");
+    while (1)
+      ;
+  }
+
+  SensorData data{};
+
+  int64_t duration = 0;
+
+  for (uint8_t i = 0; i < 10; i++)
+  {
+    int64_t start = esp_timer_get_time();
+
+    if (!bme.readSensor(data))
+    {
+      DEBUG_PRINTLN("Failed to read sensor data");
+      break;
+    }
+
+    duration += esp_timer_get_time() - start;
+
+    delay(50);
+  }
+
+  DEBUG_PRINTF("Operation took %lld µs\n", duration / 10);
+
+  bme.end();
+}
+
+/*
 void setup()
 {
 #if DEBUG
@@ -347,7 +261,27 @@ void setup()
 
   enterDeepSleep();
 }
+  */
 
 void loop()
 {
 }
+
+/*
+uint32_t readBatteryVoltage() {
+  constexpr uint8_t SAMPLES = 5;
+  constexpr uint8_t DELAY_MS = 1;
+
+  uint32_t sum = 0;
+  for(uint8_t i = 0; i < SAMPLES; i++) {
+      sum += analogRead(BAT_ACC);
+      if(i < SAMPLES - 1) delay(DELAY_MS);
+  }
+
+  uint32_t average = sum / SAMPLES;
+  // Пересчет с учетом делителя (1M + 1.5M)
+  // ADC = 12 bit (0-4095)
+  // Опорное напряжение 3.3V
+  // Коэффициент делителя = (1 + 1.5) = 2.5
+  return (average * 3300UL * 25UL) / (4095UL * 10UL); // результат в милливольтах
+}*/
