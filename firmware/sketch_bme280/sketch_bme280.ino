@@ -61,6 +61,7 @@ void sendDataTask(BME280Handler &bme)
 
 void setup()
 {
+  int64_t start = esp_timer_get_time();
   btStop();
 
 #if DEBUG
@@ -69,7 +70,7 @@ void setup()
     delay(10);
 #endif
 
-  BME280Handler bme(BME_PWR, BME_SDA, BME_SCL, BME_ADDR);
+   BME280Handler bme(BME_PWR, BME_SDA, BME_SCL, BME_ADDR);
 
   if (!bme.begin())
   {
@@ -91,6 +92,8 @@ void setup()
 
   wifi.end();
   bme.end();
+
+  DEBUG_PRINTF("Operation took %lld µs\n", esp_timer_get_time() - start);
 }
 
 /*
