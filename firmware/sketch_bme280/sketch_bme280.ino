@@ -4,6 +4,7 @@
 #include "BME280Handler.h"
 #include "UDPBroadcast.h"
 #include "WiFiHandler.h"
+#include "CriticalError.h"
 
 constexpr uint8_t BME_SDA = 5;     // GPIO 5 (SDA)
 constexpr uint8_t BME_SCL = 6;     // GPIO 6 (SCL)
@@ -11,11 +12,12 @@ constexpr uint8_t BME_ADDR = 0x76; // Адрес BME280 по умолчанию 
 constexpr uint8_t BME_PWR = 4;     // GPIO 4 (HIGH)
 
 constexpr uint8_t BAT_ACC = 3;
+constexpr float VOLTAGE_DIVIDER = 1.667; // 1M + 1.5M
 
 constexpr uint64_t uS_TO_S_FACTOR = 1000000ULL; /* Conversion factor for micro seconds to seconds */
 constexpr uint32_t TIME_TO_SLEEP = 60;          /* Time ESP32 will go to sleep (in seconds) */
 
-void enterDeepSleep()
+inline void enterDeepSleep()
 {
   if (TIME_TO_SLEEP == 0)
   {
@@ -23,11 +25,6 @@ void enterDeepSleep()
   }
 
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
-  DEBUG_PRINTF("Entering Deep Sleep for %d seconds\n", TIME_TO_SLEEP);
-
-#ifdef DEBUG
-  Serial.flush();
-#endif
   esp_deep_sleep_start();
 }
 
@@ -39,12 +36,21 @@ void sendDataTask(BME280Handler &bme)
   UDPBroadcast broadcast;
   SensorData data{};
 
+  uint32_t analogVolts = 0;
+
   for (uint8_t packetCounter = 0; packetCounter < PACKETS_COUNT;)
   {
     if (!bme.readSensor(data))
     {
       break;
     }
+
+    analogVolts += analogReadMilliVolts(BAT_ACC);
+    data.voltage = (analogVolts / (packetCounter + 1)) * VOLTAGE_DIVIDER;
+
+#if DEBUG
+    DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f voltage=%f\n", data.temperature, data.humidity, data.pressure, data.voltage);
+#endif
 
     if (broadcast.send(&data, sizeof(data)))
     {
@@ -70,100 +76,52 @@ void setup()
     delay(10);
 #endif
 
-   BME280Handler bme(BME_PWR, BME_SDA, BME_SCL, BME_ADDR);
+  pinMode(BME_PWR, OUTPUT);
+  digitalWrite(BME_PWR, HIGH);
+  delay(2);
 
-  if (!bme.begin())
-  {
-    DEBUG_PRINTLN("Could not find a valid BME280 sensor, check wiring!");
-    while (1)
-      ;
-  }
-
-  WiFiHandler wifi;
-
-  if (wifi.begin(ssid, password))
-  {
-    sendDataTask(bme);
-  }
-  else
-  {
-    DEBUG_PRINTLN("WiFi connection failed");
-  }
-
-  wifi.end();
-  bme.end();
-
-  DEBUG_PRINTF("Operation took %lld µs\n", esp_timer_get_time() - start);
-}
-
-/*
-void setup()
-{
-#if DEBUG
-  Serial.begin(115200);
-  while (!Serial)
-    delay(10);
-#endif
-
-  btStop();
-  // setCpuFrequencyMhz(120);
+  handleCriticalError(CriticalError::BME280_Init_Failed);
+  return;
 
   BME280Handler bme(BME_PWR, BME_SDA, BME_SCL, BME_ADDR);
 
-  if (!bme.begin())
+  if (bme.begin())
   {
-    DEBUG_PRINTLN("Could not find a valid BME280 sensor, check wiring!");
-    while (1)
-      ;
-  }
+    analogReadResolution(12);
+    analogSetAttenuation(ADC_11db);
 
-  DEBUG_PRINTLN("BME280 sensor connected!");
+    WiFiHandler wifi;
 
-  pinMode(LED_STATUS, OUTPUT);
-
-  if (connectToWiFi(ssid, password, WAIT_STATUS_TIMEOUT))
-  {
-    sendDataTask(bme);
-    bme.end();
-
-    if (WiFi.disconnect(true, false, WAIT_STATUS_TIMEOUT))
+    if (wifi.begin(ssid, password))
     {
-      DEBUG_PRINTLN("Wifi disconnected");
+      sendDataTask(bme);
+    }
+    else
+    {
+      DEBUG_PRINTLN("WiFi connection failed");
+      handleCriticalError(CriticalError::WiFi_Connection_Failed);
     }
 
-    setWifiConnected(false);
+    wifi.end();
+    bme.end();
   }
   else
   {
-    bme.end();
-    DEBUG_PRINTLN("WiFi connection failed");
+    DEBUG_PRINTLN("Could not find a valid BME280 sensor, check wiring!");
+    handleCriticalError(CriticalError::BME280_Init_Failed);
   }
 
-  pinMode(LED_STATUS, INPUT);
+  DEBUG_PRINTF("Operation took %lld µs\n", esp_timer_get_time() - start);
+  DEBUG_PRINTF("Entering Deep Sleep for %d seconds\n", TIME_TO_SLEEP);
+
+#ifdef DEBUG
+  Serial.flush();
+  Serial.end();
+#endif
 
   enterDeepSleep();
 }
-  */
 
 void loop()
 {
 }
-
-/*
-uint32_t readBatteryVoltage() {
-  constexpr uint8_t SAMPLES = 5;
-  constexpr uint8_t DELAY_MS = 1;
-
-  uint32_t sum = 0;
-  for(uint8_t i = 0; i < SAMPLES; i++) {
-      sum += analogRead(BAT_ACC);
-      if(i < SAMPLES - 1) delay(DELAY_MS);
-  }
-
-  uint32_t average = sum / SAMPLES;
-  // Пересчет с учетом делителя (1M + 1.5M)
-  // ADC = 12 bit (0-4095)
-  // Опорное напряжение 3.3V
-  // Коэффициент делителя = (1 + 1.5) = 2.5
-  return (average * 3300UL * 25UL) / (4095UL * 10UL); // результат в милливольтах
-}*/

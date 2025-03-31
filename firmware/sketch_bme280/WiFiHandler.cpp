@@ -26,8 +26,17 @@ inline void WiFiHandler::setWifiConnected(bool flag)
 
     setWifiConnected(false);
 
-    WiFi.mode(WIFI_STA);
-    WiFi.setTxPower(WIFI_POWER_11dBm);
+    if (!WiFi.mode(WIFI_STA))
+    {
+        DEBUG_PRINTLN("Set WIFI_STA mode failed");
+        return false;
+    }
+
+    if (!WiFi.setTxPower(WIFI_POWER_11dBm))
+    {
+        DEBUG_PRINTLN("Set TX power failed");
+        return false;
+    }
 
     const IPAddress local_IP(192, 168, 1, 11);
     const IPAddress gateway(192, 168, 1, 1);

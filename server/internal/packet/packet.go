@@ -36,6 +36,7 @@ type Packet struct {
 	Temperature float32   `json:"temperature"`
 	Humidity    float32   `json:"humidity"`
 	Pressure    float32   `json:"pressure"`
+	Voltage     float32   `json:"voltage"`
 }
 
 func EncodePacket(data []byte, p *Packet) error {
@@ -54,6 +55,11 @@ func EncodePacket(data []byte, p *Packet) error {
 	err = binary.Read(buf, binary.LittleEndian, &p.Pressure)
 	if err != nil {
 		return fmt.Errorf("failed to read pressure: %w", err)
+	}
+
+	err = binary.Read(buf, binary.LittleEndian, &p.Voltage)
+	if err != nil {
+		return fmt.Errorf("failed to read voltage: %w", err)
 	}
 
 	p.Pressure /= 133.322

@@ -8,14 +8,14 @@ struct SensorData
     float temperature{};
     float humidity{};
     float pressure{};
-    // float voltage{};
+    float voltage{}; // MilliVolts
 
     [[nodiscard]] bool isValid() const
     {
         return (temperature == temperature) &&
                (humidity == humidity) &&
-               (pressure == pressure);
-        // (voltage == voltage);
+               (pressure == pressure) &&
+               (voltage == voltage);
     }
 };
 #pragma pack(pop)

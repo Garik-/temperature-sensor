@@ -43,10 +43,6 @@ bool BME280Handler::begin()
     data.humidity = bme.readHumidity();
     data.pressure = bme.readPressure();
 
-#if DEBUG
-    DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f\n", data.temperature, data.humidity, data.pressure);
-#endif
-
     return data.isValid();
 }
 
