@@ -15,7 +15,7 @@ constexpr uint8_t BAT_ACC = 3;
 constexpr float VOLTAGE_DIVIDER = 1.667; // 1M + 1.5M
 
 constexpr uint64_t uS_TO_S_FACTOR = 1000000ULL; /* Conversion factor for micro seconds to seconds */
-constexpr uint32_t TIME_TO_SLEEP = 60;          /* Time ESP32 will go to sleep (in seconds) */
+constexpr uint32_t TIME_TO_SLEEP = 10 * 60;     /* Time ESP32 will go to sleep (in seconds) */
 
 inline void enterDeepSleep()
 {
@@ -72,16 +72,16 @@ void setup()
 
 #if DEBUG
   Serial.begin(115200);
-  while (!Serial)
-    delay(10);
+  delay(2);
 #endif
 
-  pinMode(BME_PWR, OUTPUT);
-  digitalWrite(BME_PWR, HIGH);
-  delay(2);
+  // pinMode(BME_PWR, OUTPUT);
+  // digitalWrite(BME_PWR, HIGH);
+  // delay(2);
 
-  handleCriticalError(CriticalError::BME280_Init_Failed);
-  return;
+  // handleCriticalError(CriticalError::BME280_Init_Failed);
+  // enterDeepSleep();
+  // return;
 
   BME280Handler bme(BME_PWR, BME_SDA, BME_SCL, BME_ADDR);
 

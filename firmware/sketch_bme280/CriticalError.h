@@ -80,7 +80,7 @@ public:
         }
     }
 
-    ~ErrorIndicator()
+    void end()
     {
         digitalWrite(pin, HIGH); // Выключаем LED
         pinMode(pin, INPUT);     // Освобождаем пин
@@ -111,12 +111,9 @@ void handleCriticalError(CriticalError error, unsigned long timeoutLength = 3000
     while ((millis() - start) < timeoutLength)
     {
         errorLed.update();
-
-#if DEBUG
-
-        delay(10);
-#endif
     }
+
+    errorLed.end();
 }
 
 #endif
