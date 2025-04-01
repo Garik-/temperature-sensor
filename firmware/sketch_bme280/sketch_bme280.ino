@@ -1,63 +1,23 @@
-#include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
-#include <WiFi.h>
-#include <WiFiUDP.h>
-#include <secrets.h>
-#include <constants.h>
+#include "debug.h"
+#include "secrets.h"
+#include "SensorData.h"
+#include "BME280Handler.h"
+#include "UDPBroadcast.h"
+#include "WiFiHandler.h"
+#include "CriticalError.h"
 
-#ifndef SECRETS_H
-const char *ssid = "";                    // Замените на ваш SSID
-const char *password = "";                // Замените на ваш пароль
-const char *udpAddress = "192.168.1.255"; // Широковещательный адрес
-const int udpPort = 12345;                // Порт UDP-сервера
-#endif
-
-constexpr uint8_t LED_STATUS = 8;  // Internal LED pin is 8 as per schematic
 constexpr uint8_t BME_SDA = 5;     // GPIO 5 (SDA)
 constexpr uint8_t BME_SCL = 6;     // GPIO 6 (SCL)
 constexpr uint8_t BME_ADDR = 0x76; // Адрес BME280 по умолчанию 0x76 (может быть 0x77)
+constexpr uint8_t BME_PWR = 4;     // GPIO 4 (HIGH)
 
-constexpr uint64_t uS_TO_S_FACTOR = 1000000ULL;   /* Conversion factor for micro seconds to seconds */
-constexpr uint32_t TIME_TO_SLEEP = 60;            /* Time ESP32 will go to sleep (in seconds) */
-constexpr uint32_t WAIT_STATUS_TIMEOUT = 60000UL; /* Timeout for waiting for status WiFi connection */
+constexpr uint8_t BAT_ACC = 3;
+constexpr float VOLTAGE_DIVIDER = 1.667; // 1M + 1.5M
 
-constexpr uint8_t PACKETS_COUNT = 5;
-constexpr uint32_t PACKETS_INTERVAL = 500;
+constexpr uint64_t uS_TO_S_FACTOR = 1000000ULL; /* Conversion factor for micro seconds to seconds */
+constexpr uint32_t TIME_TO_SLEEP = 10 * 60;     /* Time ESP32 will go to sleep (in seconds) */
 
-constexpr size_t MAX_UDP_PACKET_SIZE = 65507;
-
-#define DEBUG 1
-#if DEBUG
-#define DEBUG_PRINT(x) Serial.print(x)
-#define DEBUG_PRINTLN(x) Serial.println(x)
-#define DEBUG_PRINTF(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__)
-#else
-#define DEBUG_PRINT(x)
-#define DEBUG_PRINTLN(x)
-#define DEBUG_PRINTF(fmt, ...)
-#endif
-
-#pragma pack(push, 1)
-struct SensorData
-{
-  float temperature{};
-  float humidity{};
-  float pressure{};
-
-  [[nodiscard]] bool isValid() const
-  {
-    return (temperature == temperature) &&
-           (humidity == humidity) &&
-           (pressure == pressure);
-  }
-};
-#pragma pack(pop)
-
-WiFiUDP udp;
-Adafruit_BME280 bme;
-
-void enterDeepSleep()
+inline void enterDeepSleep()
 {
   if (TIME_TO_SLEEP == 0)
   {
@@ -65,67 +25,34 @@ void enterDeepSleep()
   }
 
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
-  DEBUG_PRINTF("Entering Deep Sleep for %d seconds\n", TIME_TO_SLEEP);
-
-#ifdef DEBUG
-  Serial.flush();
-#endif
   esp_deep_sleep_start();
 }
 
-/**
- * @brief Sends data over UDP
- * @param buffer Pointer to the data buffer
- * @param size Size of data in bytes
- * @return true if sending was successful, false otherwise
- */
-[[nodiscard]] inline bool sendData(const void *buffer, size_t size)
+void sendDataTask(BME280Handler &bme)
 {
-  if (buffer == nullptr)
-  {
-    return false;
-  }
+  constexpr uint8_t PACKETS_COUNT = 5;
+  constexpr uint32_t PACKETS_INTERVAL = 50;
 
-  if (size == 0 || size > MAX_UDP_PACKET_SIZE)
-  {
-    return false;
-  }
-
-  if (!udp.beginPacket(udpAddress, udpPort))
-  {
-    return false;
-  }
-
-  udp.write(static_cast<const uint8_t *>(buffer), size);
-
-  return udp.endPacket();
-}
-
-inline bool readSensor(SensorData &data)
-{
-  data.temperature = bme.readTemperature();
-  data.humidity = bme.readHumidity();
-  data.pressure = bme.readPressure();
-
-#if DEBUG
-  DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f\n", data.temperature, data.humidity, data.pressure);
-#endif
-
-  return data.isValid();
-}
-
-void sendDataTask()
-{
+  UDPBroadcast broadcast;
   SensorData data{};
+
+  uint32_t analogVolts = 0;
+
   for (uint8_t packetCounter = 0; packetCounter < PACKETS_COUNT;)
   {
-    if (!readSensor(data))
+    if (!bme.readSensor(data))
     {
-      delay(100);
-      continue;
+      break;
     }
 
-    if (sendData(&data, sizeof(data)))
+    analogVolts += analogReadMilliVolts(BAT_ACC);
+    data.voltage = (analogVolts / (packetCounter + 1)) * VOLTAGE_DIVIDER;
+
+#if DEBUG
+    DEBUG_PRINTF(" temperature=%f humidity=%f pressure=%f voltage=%f\n", data.temperature, data.humidity, data.pressure, data.voltage);
+#endif
+
+    if (broadcast.send(&data, sizeof(data)))
     {
       packetCounter++;
       if (packetCounter < PACKETS_COUNT)
@@ -135,97 +62,63 @@ void sendDataTask()
     }
   }
 
-  udp.flush();
-}
-
-inline void setWifiConnected(bool flag)
-{
-  digitalWrite(LED_STATUS, !flag);
-}
-
-[[nodiscard]] bool connectToWiFi(const char *ssid, const char *password, unsigned long timeoutLength)
-{
-  if (!ssid || !password)
-  {
-    DEBUG_PRINTLN("Invalid WiFi credentials");
-    return false;
-  }
-
-  DEBUG_PRINTF("Connecting to WiFi network: %s\n", ssid);
-
-  setWifiConnected(false);
-
-  WiFi.mode(WIFI_STA);
-
-  const IPAddress local_IP(192, 168, 1, 11);
-  const IPAddress gateway(192, 168, 1, 1);
-  const IPAddress subnet(255, 255, 255, 0);
-
-  if (!WiFi.config(local_IP, gateway, subnet))
-  {
-    DEBUG_PRINTLN("WiFi configuration failed");
-    return false;
-  }
-
-  WiFi.begin(ssid, password);
-
-  if (const int8_t rssi = WiFi.RSSI(); rssi != 0)
-  {
-    DEBUG_PRINTF("RSSI: %d\n", rssi);
-  }
-
-  DEBUG_PRINTLN("Waiting for WIFI connection...");
-
-  if (WiFi.waitForConnectResult(timeoutLength) != WL_CONNECTED)
-  {
-    DEBUG_PRINTF("Connection failed with status: %d\n", WiFi.status());
-    return false;
-  }
-
-  DEBUG_PRINTF("Connected, IP: %s\n", WiFi.localIP().toString().c_str());
-
-  setWifiConnected(true);
-
-  return true;
+  broadcast.flush();
 }
 
 void setup()
 {
+  int64_t start = esp_timer_get_time();
+  btStop();
+
 #if DEBUG
   Serial.begin(115200);
-  while (!Serial)
-    delay(10);
+  delay(2);
 #endif
 
-  Wire.begin(BME_SDA, BME_SCL);
-  if (!bme.begin(BME_ADDR))
+  // pinMode(BME_PWR, OUTPUT);
+  // digitalWrite(BME_PWR, HIGH);
+  // delay(2);
+
+  // handleCriticalError(CriticalError::BME280_Init_Failed);
+  // enterDeepSleep();
+  // return;
+
+  BME280Handler bme(BME_PWR, BME_SDA, BME_SCL, BME_ADDR);
+
+  if (bme.begin())
   {
-    DEBUG_PRINTLN("Could not find a valid BME280 sensor, check wiring!");
-    while (1)
-      ;
-  }
+    analogReadResolution(12);
+    analogSetAttenuation(ADC_11db);
 
-  DEBUG_PRINTLN("BME280 sensor connected!");
+    WiFiHandler wifi;
 
-  pinMode(LED_STATUS, OUTPUT);
-
-  if (connectToWiFi(ssid, password, WAIT_STATUS_TIMEOUT))
-  {
-    sendDataTask();
-
-    if (WiFi.disconnect(true, false, WAIT_STATUS_TIMEOUT))
+    if (wifi.begin(ssid, password))
     {
-      DEBUG_PRINTLN("Wifi disconnected");
+      sendDataTask(bme);
+    }
+    else
+    {
+      DEBUG_PRINTLN("WiFi connection failed");
+      handleCriticalError(CriticalError::WiFi_Connection_Failed);
     }
 
-    setWifiConnected(false);
+    wifi.end();
+    bme.end();
   }
   else
   {
-    DEBUG_PRINTLN("WiFi connection failed");
+    DEBUG_PRINTLN("Could not find a valid BME280 sensor, check wiring!");
+    handleCriticalError(CriticalError::BME280_Init_Failed);
   }
 
-  pinMode(LED_STATUS, INPUT);
+  DEBUG_PRINTF("Operation took %lld µs\n", esp_timer_get_time() - start);
+  DEBUG_PRINTF("Entering Deep Sleep for %d seconds\n", TIME_TO_SLEEP);
+
+#ifdef DEBUG
+  Serial.flush();
+  Serial.end();
+#endif
+
   enterDeepSleep();
 }
 

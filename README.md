@@ -34,3 +34,6 @@ journalctl --namespace=temperature-sensor -f
 - [BME280](https://sl.aliexpress.ru/p?key=8LKXGPY) absolute pressure, temperature and humidity sensor
 - [TP4056](https://sl.aliexpress.ru/p?key=zPKXG7G) charger for 18650 Li-on, Li-po batteries
 - [TPS63020](https://sl.aliexpress.ru/p?key=fyKXGnz) lithium battery USB automatic boost buck step up down module
+
+## Schematic
+![schematic](docs/schematic.png)
