@@ -33,6 +33,12 @@
     <script src="https://cdn.jsdelivr.net/npm/apexcharts@4.5.0" defer></script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
+            const dateToLocaleString = (date) =>
+                date.toLocaleString('ru-RU', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                })
+
             // https://apexcharts.com/docs/update-charts-from-json-api-ajax/
             const ru = {
                 "name": "ru",
@@ -154,8 +160,6 @@
                 },
             });
 
-
-
             const pressureSeres = (data) => [{
                 name: "",
                 data
@@ -227,13 +231,17 @@
             currentUrl.pathname = '/subscribe';
             console.log(currentUrl.toString())
 
-
             const valuePressure = document.getElementById('value-pressure');
             const valueTemperature = document.getElementById('value-temperature');
             const valueHumidity = document.getElementById('value-humidity');
+            const valueLastUpdate = document.getElementById("last-update");
+            const valueVoltage = document.getElementById("value-voltage");
 
             const progressBarHumidity = document.getElementById('progress-bar-humidity');
             const progressBarHumiditySpan = progressBarHumidity.querySelector('.visually-hidden');
+
+            const progressBarVoltage = document.getElementById('progress-bar-voltage');
+            const progressBarVoltageSpan = progressBarHumidity.querySelector('.visually-hidden');
 
             const formatter = new Intl.NumberFormat('ru-RU', {
                 minimumFractionDigits: 2,
@@ -249,6 +257,20 @@
                 progressBarHumiditySpan.textContent = label;
             }
 
+            const FULL_CHARGE_VOLTAGE = 4200;
+
+            const updateProgressBarVoltage = (voltage) => {
+                const percent = (voltage / FULL_CHARGE_VOLTAGE) * 100;
+                console.log('percent', percent);
+
+                const label = formatter.format(percent) + "%"
+
+                progressBarVoltage.style = "width:" + percent.toFixed(2) + "%";
+                progressBarVoltage.setAttribute('aria-valuenow', +percent.toFixed(2));
+                progressBarVoltage.setAttribute('aria-label', label);
+                progressBarVoltageSpan.textContent = label;
+            }
+
             const lastChart = {
                 temperature: 0,
                 pressure: 0,
@@ -261,8 +283,11 @@
                 valueTemperature.textContent = formatter.format(current.temperature);
                 valuePressure.textContent = formatter.format(current.pressure);
                 valueHumidity.textContent = formatter.format(current.humidity);
+                valueVoltage.textContent = formatter.format(current.voltage);
+                valueLastUpdate.textContent = dateToLocaleString(new Date(current.timestamp));
 
                 updateProgressBar(current.humidity);
+                updateProgressBarVoltage(current.voltage);
 
                 if (lastChart.temperature < chart.temperature.length) {
                     temperatureChart.updateSeries(temperatureSeries(chart.temperature));
@@ -275,14 +300,10 @@
                 }
             }
 
-            // init
-            onEvent({{.JSONData }});
-
-
-        const eventSource = new EventSource(currentUrl.toString());
-        eventSource.onmessage = function (event) {
-            onEvent(JSON.parse(event.data))
-        };
+            const eventSource = new EventSource(currentUrl.toString());
+            eventSource.onmessage = function (event) {
+                onEvent(JSON.parse(event.data));
+            };
         });
     </script>
 </head>
@@ -298,13 +319,17 @@
                             <div class="page-pretitle">Сенсоры</div>
                             <div class="page-title">На балконе</div>
                         </div>
+                        <div class="col-auto text-end">
+                            <div class="text-secondary fs-5">последнее обновление</div>
+                            <div id="last-update"></div>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="page-body">
                 <div class="container-xl">
                     <div class="row row-deck row-cards">
-                        <div class="col-sm-6 col-lg-4">
+                        <div class="col-sm-6 col-lg-3">
                             <div class="card">
                                 <div class="card-body">
                                     <div class="subheader">Температура</div>
@@ -313,7 +338,7 @@
                                 <div id="chart-temperature-bg" class="chart-sm"></div>
                             </div>
                         </div>
-                        <div class="col-sm-6 col-lg-4">
+                        <div class="col-sm-6 col-lg-3">
                             <div class="card">
                                 <div class="card-body d-flex flex-column">
                                     <div class="subheader">Влажность</div>
@@ -330,7 +355,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-sm-6 col-lg-4">
+                        <div class="col-sm-6 col-lg-3">
                             <div class="card">
                                 <div class="card-body">
                                     <div class="subheader">Давление</div>
@@ -339,6 +364,26 @@
                                         <div class="me-auto">мм рт. ст.</div>
                                     </div>
                                     <div id="chart-pressure" class="chart-sm"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="card">
+                                <div class="card-body d-flex flex-column">
+                                    <div class="subheader">Батарея</div>
+                                    <div class="d-flex align-items-baseline">
+                                        <div class="h1 mb-0 me-2" id="value-voltage"></div>
+                                        <div class="me-auto">мВ</div>
+                                    </div>
+
+                                    <div class="progress progress-sm mt-auto" bis_skin_checked="1">
+                                        <div class="progress-bar bg-primary" style="width: 0%" id="progress-bar-voltage"
+                                            role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+                                            aria-label="" bis_skin_checked="1">
+                                            <span class="visually-hidden"></span>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
                         </div>
