@@ -117,7 +117,10 @@ func fileExists(fs embed.FS, path string) bool {
 	return !errors.Is(err, iofs.ErrNotExist)
 }
 
-func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.HandlerFunc {
+func mainHandler(fileServer http.Handler, tmpl *template.Template, s stats) http.HandlerFunc {
+	etagCache := make(map[string]string)
+	version := time.Now().Unix()
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -129,8 +132,24 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 
 		path := "public" + r.URL.Path
 		if fileExists(publicFiles, path) {
+			if etag, ok := etagCache[path]; ok {
+				w.Header().Set("ETag", etag)
+
+				if match := r.Header.Get("If-None-Match"); match == etag {
+					w.WriteHeader(http.StatusNotModified)
+
+					return
+				}
+			} else {
+				etag := fmt.Sprintf(`"W/%s-%d"`, r.URL.Path, version)
+				w.Header().Set("ETag", etag)
+				etagCache[path] = etag
+			}
+
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+
 			r.URL.Path = path
-			fs.ServeHTTP(w, r)
+			fileServer.ServeHTTP(w, r)
 
 			return
 		}
