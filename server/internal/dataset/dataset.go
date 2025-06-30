@@ -81,7 +81,7 @@ func (d *setOfData) timeSeries() timeSeries {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	series := timeSeries{}
+	series := make(timeSeries, 0, len(d.data)*3)
 
 	timestamps := make([]int64, 0, len(d.data))
 	for timestamp := range d.data {

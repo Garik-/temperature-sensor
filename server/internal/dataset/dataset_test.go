@@ -96,6 +96,32 @@ func TestTimeSeries(t *testing.T) {
 	}
 }
 
+func BenchmarkTimeSeries(b *testing.B) {
+	set := newSetOfData()
+
+	// Add data
+	for i := range 20 {
+		day := i + 1
+		morningTime := time.Date(2023, 10, day, 8, 0, 0, 0, time.UTC)
+		set.push(10.5, morningTime)
+		set.push(15.5, morningTime)
+
+		dayTime := time.Date(2023, 10, day, 14, 0, 0, 0, time.UTC)
+		set.push(20.5, dayTime)
+		set.push(25.5, dayTime)
+
+		eveningTime := time.Date(2023, 10, day, 19, 0, 0, 0, time.UTC)
+		set.push(30.5, eveningTime)
+		set.push(35.5, eveningTime)
+	}
+
+	b.ResetTimer()
+
+	for b.Loop() {
+		_ = set.timeSeries()
+	}
+}
+
 func TestRemove(t *testing.T) {
 	set := newSetOfData()
 
