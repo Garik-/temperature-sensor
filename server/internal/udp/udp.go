@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 
@@ -21,7 +21,7 @@ type Service struct {
 }
 
 func Listen(port string) (*Service, error) {
-	log.Println("listening UDP on " + port)
+	slog.Info("listening UDP", "port", port)
 
 	pc, err := net.ListenPacket("udp4", port)
 	if err != nil {
@@ -67,7 +67,7 @@ func (s *Service) Listen(ctx context.Context, emitter eventEmitter) error {
 				continue
 			}
 
-			log.Printf("failed to read from UDP: %v\n", err)
+			slog.Error("failed to read from UDP", "error", err)
 
 			continue
 		}
@@ -79,7 +79,13 @@ func (s *Service) Listen(ctx context.Context, emitter eventEmitter) error {
 			return fmt.Errorf("encodePacket: %w", err)
 		}
 
-		log.Printf("packet=%v", p)
+		slog.Info("received packet",
+			"temperature", p.Temperature,
+			"humidity", p.Humidity,
+			"pressure", p.Pressure,
+			"voltage", p.Voltage,
+			"timestamp", p.Timestamp)
+
 		emitter.Emit(p)
 	}
 }

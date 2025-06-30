@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -37,14 +37,17 @@ func main() { //nolint:funlen
 	showVersion := flag.Bool("v", false, "Show version information")
 	flag.Parse()
 
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	if *showVersion {
-		log.Println(Version)
+		slog.Info("version info", "version", Version)
 		os.Exit(0)
 	}
 
 	serverUDP, err := udp.Listen(*port)
 	if err != nil {
-		log.Println(err)
+		slog.Error("failed to start UDP server", "error", err)
 
 		return
 	}
@@ -61,7 +64,7 @@ func main() { //nolint:funlen
 
 	serverHTTP, err := web.New(ctx, *addr, emitter, stats)
 	if err != nil {
-		log.Println(err)
+		slog.Error("failed to create HTTP server", "error", err)
 
 		return
 	}
@@ -81,7 +84,7 @@ func main() { //nolint:funlen
 	})
 
 	g.Go(func() error {
-		log.Println("listening on " + serverHTTP.Addr)
+		slog.Info("starting HTTP server", "address", serverHTTP.Addr)
 
 		return serverHTTP.ListenAndServe()
 	})
@@ -96,6 +99,6 @@ func main() { //nolint:funlen
 	})
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Println(err)
+		slog.Error("server error", "error", err)
 	}
 }

@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	iofs "io/fs"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"text/template"
@@ -54,7 +55,7 @@ func sendResponse(w http.ResponseWriter, response *dataset.EventResponse) error 
 		return errStreamUnsupported
 	}
 
-	if _, err := fmt.Fprintf(w, "data: "); err != nil {
+	if _, err := io.WriteString(w, "data: "); err != nil {
 		return fmt.Errorf("error writing to client: %w", err)
 	}
 
@@ -64,7 +65,7 @@ func sendResponse(w http.ResponseWriter, response *dataset.EventResponse) error 
 		return fmt.Errorf("error encoding JSON: %w", err)
 	}
 
-	if _, err := fmt.Fprint(w, "\n\n"); err != nil {
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
 		return fmt.Errorf("error writing to client: %w", err)
 	}
 
@@ -88,7 +89,7 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 		ctx := r.Context()
 
 		if err := sendResponse(w, s.EventResponse()); err != nil {
-			log.Println(err.Error())
+			slog.Error("failed to send initial response", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 
 			return
@@ -98,7 +99,7 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 			select {
 			case <-ch:
 				if err := sendResponse(w, s.EventResponse()); err != nil {
-					log.Println(err.Error())
+					slog.Error("failed to send response", "error", err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 
 					return
@@ -134,8 +135,7 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 
 		jsonData, err := json.Marshal(s.EventResponse())
 		if err != nil {
-			log.Println(err.Error())
-
+			slog.Error("failed to marshal JSON data", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 
 			return
@@ -147,11 +147,11 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 			JSONData: string(jsonData),
 		}
 
-		log.Printf("data=%+v\n", data)
+		slog.Debug("data", "json", data.JSONData)
 
 		err = tmpl.Execute(w, data)
 		if err != nil {
-			log.Println(err.Error())
+			slog.Error("failed to execute template", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
