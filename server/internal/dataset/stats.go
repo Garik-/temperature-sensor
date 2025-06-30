@@ -74,7 +74,7 @@ func (s *Stats) Clear(ctx context.Context, interval time.Duration) error {
 		case <-ctx.Done():
 			return nil
 		case now := <-ticker.C:
-			slog.Debug("running scheduled task clear")
+			slog.DebugContext(ctx, "running scheduled task clear")
 
 			sevenDaysAgo := now.AddDate(0, 0, -7)
 			s.temperature.remove(sevenDaysAgo)

@@ -67,7 +67,7 @@ func (s *Service) Listen(ctx context.Context, emitter eventEmitter) error {
 				continue
 			}
 
-			slog.Error("failed to read from UDP", "error", err)
+			slog.ErrorContext(ctx, "failed to read from UDP", "error", err)
 
 			continue
 		}
@@ -79,7 +79,7 @@ func (s *Service) Listen(ctx context.Context, emitter eventEmitter) error {
 			return fmt.Errorf("encodePacket: %w", err)
 		}
 
-		slog.Info("received packet",
+		slog.InfoContext(ctx, "received packet",
 			"temperature", p.Temperature,
 			"humidity", p.Humidity,
 			"pressure", p.Pressure,

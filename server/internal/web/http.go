@@ -89,7 +89,7 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 		ctx := r.Context()
 
 		if err := sendResponse(w, s.EventResponse()); err != nil {
-			slog.Error("failed to send initial response", "error", err)
+			slog.ErrorContext(ctx, "failed to send initial response", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 
 			return
@@ -99,7 +99,7 @@ func subscribeHandler(emitter eventEmitter, s stats) http.HandlerFunc {
 			select {
 			case <-ch:
 				if err := sendResponse(w, s.EventResponse()); err != nil {
-					slog.Error("failed to send response", "error", err)
+					slog.ErrorContext(ctx, "failed to send response", "error", err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 
 					return
@@ -125,6 +125,8 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 			return
 		}
 
+		ctx := r.Context()
+
 		path := "public" + r.URL.Path
 		if fileExists(publicFiles, path) {
 			r.URL.Path = path
@@ -135,7 +137,7 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 
 		jsonData, err := json.Marshal(s.EventResponse())
 		if err != nil {
-			slog.Error("failed to marshal JSON data", "error", err)
+			slog.ErrorContext(ctx, "failed to marshal JSON data", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 
 			return
@@ -147,11 +149,11 @@ func mainHandler(fs http.Handler, tmpl *template.Template, s stats) http.Handler
 			JSONData: string(jsonData),
 		}
 
-		slog.Debug("data", "json", data.JSONData)
+		slog.DebugContext(ctx, "data", "json", data.JSONData)
 
 		err = tmpl.Execute(w, data)
 		if err != nil {
-			slog.Error("failed to execute template", "error", err)
+			slog.ErrorContext(ctx, "failed to execute template", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
