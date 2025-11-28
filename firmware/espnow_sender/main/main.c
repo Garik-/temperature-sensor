@@ -10,8 +10,8 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#define ESPNOW_WIFI_MODE WIFI_MODE_AP
-#define ESPNOW_WIFI_IF ESP_IF_WIFI_AP
+#define ESPNOW_WIFI_MODE WIFI_MODE_STA
+#define ESPNOW_WIFI_IF ESP_IF_WIFI_STA
 #define ESPNOW_QUEUE_SIZE 6
 #define ESPNOW_MAXDELAY 512
 
@@ -22,12 +22,11 @@ typedef enum {
 
 typedef struct {
     uint8_t mac_addr[ESP_NOW_ETH_ALEN];
-    uint8_t *data;
-    int data_len;
-} event_recv_cb_t;
+    esp_now_send_status_t status;
+} event_send_cb_t;
 
 typedef union {
-    event_recv_cb_t recv_cb;
+    event_send_cb_t send_cb;
 } event_info_t;
 
 typedef struct {
@@ -35,9 +34,10 @@ typedef struct {
     event_info_t info;
 } event_t;
 
-static const char *TAG = "esp_now_receiver";
+static const char *TAG = "esp_now_sender";
+static uint8_t s_mac[ESP_NOW_ETH_ALEN] = {0x02, 0x12, 0x34, 0x56, 0x78, 0x9A};
+static uint8_t s_peer_mac[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x15, 0x84, 0x45}; // a0:b7:65:15:84:45
 static QueueHandle_t s_event_queue = NULL;
-static uint8_t s_peer_mac[ESP_NOW_ETH_ALEN] = {0x02, 0x12, 0x34, 0x56, 0x78, 0x9A};
 
 /* WiFi should start before using ESPNOW */
 static void wifi_init(void) {
@@ -47,8 +47,11 @@ static void wifi_init(void) {
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(ESPNOW_WIFI_MODE));
+
     ESP_ERROR_CHECK(esp_wifi_start());
+
     ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
+    ESP_ERROR_CHECK(esp_wifi_set_mac(WIFI_IF_STA, s_mac));
 }
 
 static void test_espnow_deinit() {
@@ -57,50 +60,50 @@ static void test_espnow_deinit() {
     esp_now_deinit();
 }
 
-static void test_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
+static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
     event_t evt;
-    event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-    uint8_t *mac_addr = recv_info->src_addr;
-    // uint8_t *des_addr = recv_info->des_addr;
+    event_send_cb_t *send_cb = &evt.info.send_cb;
 
-    if (mac_addr == NULL || data == NULL || len <= 0) {
-        ESP_LOGE(TAG, "Receive cb arg error");
+    if (tx_info == NULL) {
+        ESP_LOGE(TAG, "Send cb arg error");
         return;
     }
 
-    // TODO: add check dest_addr if needed
-
-    evt.id = RECV_CB;
-    memcpy(recv_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    recv_cb->data = malloc(len);
-    if (recv_cb->data == NULL) {
-        ESP_LOGE(TAG, "Malloc receive data fail");
-        return;
-    }
-    memcpy(recv_cb->data, data, len);
-    recv_cb->data_len = len;
+    evt.id = SEND_CB;
+    memcpy(send_cb->mac_addr, tx_info->des_addr, ESP_NOW_ETH_ALEN);
+    send_cb->status = status;
     if (xQueueSend(s_event_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
-        ESP_LOGW(TAG, "Send receive queue fail");
-        free(recv_cb->data);
+        ESP_LOGW(TAG, "Send send queue fail");
     }
 }
 
 static void test_espnow_task(void *pvParameter) {
-
     event_t evt;
 
     vTaskDelay(5000 / portTICK_PERIOD_MS);
-    ESP_LOGI(TAG, "start receive peer data task");
+    ESP_LOGI(TAG, "Start sending data");
+
+    if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
+        ESP_LOGE(TAG, "Send error");
+        test_espnow_deinit();
+        vTaskDelete(NULL);
+    }
 
     while (xQueueReceive(s_event_queue, &evt, portMAX_DELAY) == pdTRUE) {
-        if (evt.id != RECV_CB) {
+
+        if (evt.id != SEND_CB) {
             ESP_LOGW(TAG, "receive invalid event id: %d", evt.id);
             continue;
         }
 
-        event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-        ESP_LOGI(TAG, "receive data from " MACSTR ", len: %d", MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
-        free(recv_cb->data);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+        /* Send the next data after the previous data is sent. */
+        if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
+            ESP_LOGE(TAG, "Send error");
+            test_espnow_deinit();
+            vTaskDelete(NULL);
+        }
     }
 }
 
@@ -114,7 +117,7 @@ static esp_err_t test_espnow_init(void) {
 
     /* Initialize ESPNOW and register sending and receiving callback function. */
     ESP_ERROR_CHECK(esp_now_init());
-    ESP_ERROR_CHECK(esp_now_register_recv_cb(test_espnow_recv_cb));
+    ESP_ERROR_CHECK(esp_now_register_send_cb(test_espnow_send_cb));
 
     /* Add broadcast peer information to peer list. */
     esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
