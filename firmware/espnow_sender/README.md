@@ -1,32 +1,18 @@
-# _Sample project_
+Для того что бы отправить данные в esp_now нужно вызвать esp_now_send, но это операция асинхронная и поэтому нужно после этого вызова дождаться espnow_send_cb статуса о том что транзакция была отправлена или не отправлена
+при этом espnow_send_cb должен быть максимально быстрым, от этого зависит скорость передачи данных по сети, поэтому в нем обычно просто записывают статус в очередь, а дальше ждут статуса в отдельной задаче
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+## Приоритеты задач
+https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/freertos_idf.html#fixed-priority
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+0 низкая 25 самая высокая, если поставить слишком большой приоритет то будет сжирать весь CPU
+Обычно пользовательские задачи используют приоритет 1…10 для обычных действий, 4–5 для "средних", больше 10 для критичных задач (таймеры, Wi-Fi, ISR обработка).
 
+## Примитивы синхронизации
+Про очереди мы уже знаем, есть бинарные симафоры и мьютексы
 
+Если мы хотим нотификацию сделать что типа подожди пока в другой таске что-то там сработает - то это семафор
+https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/03-Direct-to-task-notifications/01-Task-notifications
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+оказывается есть вот такой вот функционал и типа он круче чем бинарные семафоры
 
-## Example folder contents
-
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
-
-Below is short explanation of remaining files in the project folder.
-
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+The flexibility of task notifications allows them to be used where otherwise it would have been necessary to create a separate queue, binary semaphore, counting semaphore or event group. Unblocking an RTOS task with a direct notification is 45% faster† and uses less RAM than unblocking a task using an intermediary object such as a binary semaphore
