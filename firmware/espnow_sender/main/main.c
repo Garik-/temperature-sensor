@@ -82,7 +82,6 @@ static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
     configASSERT(xTaskToNotify != NULL);
-    configASSERT(tx_info != NULL);
 
     xTaskNotifyFromISR(xTaskToNotify, status, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
 
