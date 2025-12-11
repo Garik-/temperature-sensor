@@ -1,5 +1,6 @@
 #include "bme280.h"
 #include "driver/gpio.h"
+#include "esp_check.h"
 #include "esp_event.h"
 #include "esp_idf_version.h"
 #include "esp_log.h"
@@ -72,7 +73,7 @@ static void wifi_init(void) {
 static void test_espnow_deinit() {
     vQueueDelete(s_event_queue);
     s_event_queue = NULL;
-    esp_now_deinit();
+    ESP_ERROR_CHECK(esp_now_deinit());
 }
 
 static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
@@ -131,8 +132,8 @@ static esp_err_t test_espnow_init(void) {
     }
 
     /* Initialize ESPNOW and register sending and receiving callback function. */
-    ESP_ERROR_CHECK(esp_now_init());
-    ESP_ERROR_CHECK(esp_now_register_send_cb(test_espnow_send_cb));
+    ESP_RETURN_ON_ERROR(esp_now_init(), TAG, "esp_now_init fail");
+    ESP_RETURN_ON_ERROR(esp_now_register_send_cb(test_espnow_send_cb), TAG, "esp_now_register_send_cb fail");
 
     /* Add broadcast peer information to peer list. */
     esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
@@ -146,31 +147,25 @@ static esp_err_t test_espnow_init(void) {
     peer->ifidx = ESPNOW_WIFI_IF;
     peer->encrypt = false;
     memcpy(peer->peer_addr, s_peer_mac, ESP_NOW_ETH_ALEN);
-    ESP_ERROR_CHECK(esp_now_add_peer(peer));
-    free(peer);
 
+    if (esp_now_add_peer(peer) != ESP_OK) {
+        ESP_LOGE(TAG, "Add peer fail");
+        test_espnow_deinit();
+        free(peer);
+        return ESP_FAIL;
+    }
+
+    free(peer);
     xTaskCreate(test_espnow_task, "test_espnow_task", 2048, NULL, 4, NULL);
 
     return ESP_OK;
 }
 
 static esp_err_t bme280_init() {
-    esp_err_t ret;
-
     gpio_config_t io_conf = {.pin_bit_mask = GPIO_OUTPUT_PIN_SEL, .mode = GPIO_MODE_OUTPUT};
-    ret = gpio_config(&io_conf);
 
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = gpio_set_level(BME_OUTPUT_PWR, 1);
-
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_set_level failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "gpio_config failed");
+    ESP_RETURN_ON_ERROR(gpio_set_level(BME_OUTPUT_PWR, 1), TAG, "gpio_set_level failed");
 
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
@@ -192,16 +187,12 @@ static esp_err_t bme280_init() {
         return ESP_FAIL;
     }
 
-    ret = bme280_default_init(bme280);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "bme280_default_init failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ESP_RETURN_ON_ERROR(bme280_default_init(bme280), TAG, "bme280_default_init failed");
 
     return ESP_OK;
 }
 
-static esp_err_t bme280_deinit() {
+static void bme280_deinit() {
     bme280_delete(&bme280);
     i2c_bus_delete(&i2c_bus);
 
