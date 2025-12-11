@@ -1,6 +1,7 @@
 dependencies:
   espressif/bme280:
-    component_hash: 873d97d0bd30004f45d1653f078a4bafe39c1767e57d4bae0f0a13bc3a4d5e3d
+    component_hash: 
+      873d97d0bd30004f45d1653f078a4bafe39c1767e57d4bae0f0a13bc3a4d5e3d
     dependencies:
     - name: espressif/cmake_utilities
       registry_url: https://components.espressif.com
@@ -18,7 +19,8 @@ dependencies:
       type: service
     version: 0.1.1
   espressif/cmake_utilities:
-    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    component_hash: 
+      351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
     dependencies:
     - name: idf
       require: private
@@ -28,7 +30,8 @@ dependencies:
       type: service
     version: 0.5.3
   espressif/i2c_bus:
-    component_hash: 4e990dc11734316186b489b362c61d41f23f79d58bc169795cec215e528cba14
+    component_hash: 
+      4e990dc11734316186b489b362c61d41f23f79d58bc169795cec215e528cba14
     dependencies:
     - name: espressif/cmake_utilities
       registry_url: https://components.espressif.com

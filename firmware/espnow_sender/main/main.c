@@ -17,7 +17,7 @@
 #define ESPNOW_WIFI_MODE WIFI_MODE_STA
 #define ESPNOW_WIFI_IF ESP_IF_WIFI_STA
 #define ESPNOW_QUEUE_SIZE 6
-#define ESPNOW_MAXDELAY 512
+#define ESPNOW_MAXDELAY pdMS_TO_TICKS(512)
 
 #define BME_SDA GPIO_NUM_5        // GPIO 5 (SDA)
 #define BME_SCL GPIO_NUM_6        // GPIO 6 (SCL)
@@ -50,10 +50,12 @@ typedef struct {
 static const char *TAG = "esp_now_sender";
 static uint8_t s_mac[ESP_NOW_ETH_ALEN] = {0x02, 0x12, 0x34, 0x56, 0x78, 0x9A};
 static uint8_t s_peer_mac[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x15, 0x84, 0x45}; // a0:b7:65:15:84:45
-static QueueHandle_t s_event_queue = NULL;
 
 static i2c_bus_handle_t i2c_bus = NULL;
 static bme280_handle_t bme280 = NULL;
+
+static TaskHandle_t xTaskToNotify = NULL;
+static QueueHandle_t s_event_queue = NULL;
 
 /* WiFi should start before using ESPNOW */
 static void wifi_init(void) {
@@ -77,34 +79,46 @@ static void test_espnow_deinit() {
 }
 
 static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
-    event_t evt;
-    event_send_cb_t *send_cb = &evt.info.send_cb;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-    if (tx_info == NULL) {
-        ESP_LOGE(TAG, "Send cb arg error");
-        return;
-    }
+    configASSERT(xTaskToNotify != NULL);
+    configASSERT(tx_info != NULL);
 
-    evt.id = SEND_CB;
-    memcpy(send_cb->mac_addr, tx_info->des_addr, ESP_NOW_ETH_ALEN);
-    send_cb->status = status;
-    if (xQueueSend(s_event_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
-        ESP_LOGW(TAG, "Send send queue fail");
-    }
+    xTaskNotifyFromISR(xTaskToNotify, status, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 static void test_espnow_task(void *pvParameter) {
-    event_t evt;
+    xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
     ESP_LOGI(TAG, "Start sending data");
 
-    if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
-        ESP_LOGE(TAG, "Send error");
-        test_espnow_deinit();
-        vTaskDelete(NULL);
+    BaseType_t xResult;
+    uint32_t status;
+
+    for (;;) {
+        if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
+            ESP_LOGE(TAG, "Send error");
+            test_espnow_deinit();
+            vTaskDelete(NULL);
+        }
+
+        xResult = xTaskNotifyWait(pdFALSE,   /* Don't clear bits on entry. */
+                                  ULONG_MAX, /* Clear all bits on exit. */
+                                  &status,   /* Stores the notified value. */
+                                  ESPNOW_MAXDELAY);
+
+        if (xResult == pdPASS) {
+            ESP_LOGI(TAG, "Notification received with status: %d", status);
+        } else {
+            ESP_LOGW(TAG, "No notification received within the timeout period");
+        }
+
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
+    /*
     while (xQueueReceive(s_event_queue, &evt, portMAX_DELAY) == pdTRUE) {
 
         if (evt.id != SEND_CB) {
@@ -114,13 +128,14 @@ static void test_espnow_task(void *pvParameter) {
 
         vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-        /* Send the next data after the previous data is sent. */
-        if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
-            ESP_LOGE(TAG, "Send error");
-            test_espnow_deinit();
-            vTaskDelete(NULL);
-        }
+         Send the next data after the previous data is sent.
+    if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
+        ESP_LOGE(TAG, "Send error");
+        test_espnow_deinit();
+        vTaskDelete(NULL);
     }
+}
+*/
 }
 
 static esp_err_t test_espnow_init(void) {

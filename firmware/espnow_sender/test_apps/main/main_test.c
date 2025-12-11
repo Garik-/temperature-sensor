@@ -9,15 +9,48 @@
 #include "test_utils.h"
 #endif
 
-static int add(int a, int b) {
-    return a + b;
+/* Stores the handle of the task that will be notified when the
+   transmission is complete. */
+static TaskHandle_t xTaskToNotify = NULL;
+
+/* The index within the target task's array of task notifications
+   to use. */
+const UBaseType_t xArrayIndex = 1;
+
+static const char *TAG = "main_test";
+
+void start_transmission(void) {
+    configASSERT(xTaskToNotify == NULL);
+    xTaskToNotify = xTaskGetCurrentTaskHandle();
+    // esp_now_send
 }
 
-TEST_CASE("adding numbers works", "[math]") {
-    TEST_ASSERT_EQUAL_INT(4, add(2, 2));
+static void test_taskA(void *pvParameter) {
+    ESP_LOGI(TAG, "test_taskA started");
+
+    start_transmission();
+
+    ESP_LOGI(TAG, "test_taskA completed");
+    vTaskDelete(NULL); // task should delete itself
+}
+
+static void test_taskB(void *pvParameter) {
+    ESP_LOGI(TAG, "test_taskB started");
+
+    TEST_ASSERT_NOT_NULL(xTaskToNotify);
+
+    ESP_LOGI(TAG, "test_taskB completed");
+
+    vTaskDelete(NULL); // task should delete itself
+}
+
+TEST_CASE("task notify", "[main_test]") {
+    xTaskCreate(test_taskA, "test_taskA", 2048, NULL, 4, NULL);
+    xTaskCreate(test_taskB, "test_taskB", 2048, NULL, 5, NULL);
 }
 
 void app_main(void) {
-    ESP_LOGI("TEST_APP", "Starting tests");
+    ESP_LOGI(TAG, "Starting tests");
+
     unity_run_menu();
 }
