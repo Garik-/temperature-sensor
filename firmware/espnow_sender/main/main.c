@@ -1,6 +1,7 @@
 #include "bme280.h"
 #include "driver/gpio.h"
 #include "esp_check.h"
+#include "esp_crc.h"
 #include "esp_event.h"
 #include "esp_idf_version.h"
 #include "esp_log.h"
@@ -17,7 +18,7 @@
 #define ESPNOW_WIFI_MODE WIFI_MODE_STA
 #define ESPNOW_WIFI_IF ESP_IF_WIFI_STA
 #define ESPNOW_QUEUE_SIZE 6
-#define ESPNOW_MAXDELAY 512
+#define ESPNOW_MAXDELAY pdMS_TO_TICKS(512)
 
 #define BME_SDA GPIO_NUM_5        // GPIO 5 (SDA)
 #define BME_SCL GPIO_NUM_6        // GPIO 6 (SCL)
@@ -28,32 +29,26 @@
 
 #define GPIO_OUTPUT_PIN_SEL ((1ULL << BME_OUTPUT_PWR))
 
-typedef enum {
-    SEND_CB,
-    RECV_CB,
-} event_id_t;
+typedef struct {
+    float temperature;
+    float humidity;
+    float pressure;
+} __attribute__((packed)) test_espnow_payload_t;
 
 typedef struct {
-    uint8_t mac_addr[ESP_NOW_ETH_ALEN];
-    esp_now_send_status_t status;
-} event_send_cb_t;
-
-typedef union {
-    event_send_cb_t send_cb;
-} event_info_t;
-
-typedef struct {
-    event_id_t id;
-    event_info_t info;
-} event_t;
+    test_espnow_payload_t payload;
+    uint16_t crc; // CRC16 value of ESPNOW data.
+} __attribute__((packed)) test_espnow_data_t;
 
 static const char *TAG = "esp_now_sender";
 static uint8_t s_mac[ESP_NOW_ETH_ALEN] = {0x02, 0x12, 0x34, 0x56, 0x78, 0x9A};
 static uint8_t s_peer_mac[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x15, 0x84, 0x45}; // a0:b7:65:15:84:45
-static QueueHandle_t s_event_queue = NULL;
 
 static i2c_bus_handle_t i2c_bus = NULL;
 static bme280_handle_t bme280 = NULL;
+
+static TaskHandle_t xTaskToNotify = NULL;
+static QueueHandle_t s_event_queue = NULL;
 
 /* WiFi should start before using ESPNOW */
 static void wifi_init(void) {
@@ -77,55 +72,45 @@ static void test_espnow_deinit() {
 }
 
 static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
-    event_t evt;
-    event_send_cb_t *send_cb = &evt.info.send_cb;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-    if (tx_info == NULL) {
-        ESP_LOGE(TAG, "Send cb arg error");
-        return;
-    }
+    configASSERT(xTaskToNotify != NULL);
 
-    evt.id = SEND_CB;
-    memcpy(send_cb->mac_addr, tx_info->des_addr, ESP_NOW_ETH_ALEN);
-    send_cb->status = status;
-    if (xQueueSend(s_event_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
-        ESP_LOGW(TAG, "Send send queue fail");
-    }
+    xTaskNotifyFromISR(xTaskToNotify, status, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 static void test_espnow_task(void *pvParameter) {
-    event_t evt;
+    test_espnow_data_t data;
 
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    xTaskToNotify = xTaskGetCurrentTaskHandle();
+
     ESP_LOGI(TAG, "Start sending data");
 
-    if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
-        ESP_LOGE(TAG, "Send error");
-        test_espnow_deinit();
-        vTaskDelete(NULL);
-    }
+    BaseType_t xResult;
+    uint32_t status;
 
-    while (xQueueReceive(s_event_queue, &evt, portMAX_DELAY) == pdTRUE) {
-
-        if (evt.id != SEND_CB) {
-            ESP_LOGW(TAG, "receive invalid event id: %d", evt.id);
-            continue;
-        }
-
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        /* Send the next data after the previous data is sent. */
-        if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&s_mac, ESP_NOW_ETH_ALEN) != ESP_OK) {
+    while (xQueueReceive(s_event_queue, &data, portMAX_DELAY) == pdTRUE) {
+        if (esp_now_send((const uint8_t *)&s_peer_mac, (const uint8_t *)&data, sizeof(test_espnow_data_t)) != ESP_OK) {
             ESP_LOGE(TAG, "Send error");
             test_espnow_deinit();
             vTaskDelete(NULL);
+        }
+
+        xResult = xTaskNotifyWait(pdFALSE,   /* Don't clear bits on entry. */
+                                  ULONG_MAX, /* Clear all bits on exit. */
+                                  &status,   /* Stores the notified value. */
+                                  ESPNOW_MAXDELAY);
+
+        if (xResult != pdPASS) {
+            ESP_LOGW(TAG, "No notification received within the timeout period");
         }
     }
 }
 
 static esp_err_t test_espnow_init(void) {
-
-    s_event_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(event_t));
+    s_event_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(test_espnow_data_t));
     if (s_event_queue == NULL) {
         ESP_LOGE(TAG, "create queue fail");
         return ESP_FAIL;
@@ -199,22 +184,42 @@ static void bme280_deinit() {
     gpio_set_level(BME_OUTPUT_PWR, 0);
 }
 
-void bme280_test_getdata() {
-    int cnt = 10;
-    while (cnt--) {
-        float temperature = 0.0, humidity = 0.0, pressure = 0.0;
-        if (ESP_OK == bme280_read_temperature(bme280, &temperature)) {
-            ESP_LOGI(TAG, "temperature:%f ", temperature);
+static void bme280_getdata_task(void *pvParameter) {
+    test_espnow_data_t data;
+    float value;
+
+    if (ESP_OK != bme280_init()) {
+        ESP_LOGE(TAG, "BME280 init failed");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    for (;;) {
+        int cnt = 10;
+        while (cnt--) {
+            if (ESP_OK == bme280_read_temperature(bme280, &value)) {
+                data.payload.temperature = value;
+            }
+            if (ESP_OK == bme280_read_humidity(bme280, &value)) {
+                data.payload.humidity = value;
+            }
+            if (ESP_OK == bme280_read_pressure(bme280, &value)) {
+                data.payload.pressure = value;
+            }
+
+            data.crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&data.payload, sizeof(data.payload));
+
+            ESP_LOGI(TAG, "Temp: %.2f C, Hum: %.2f %%, Pres: %.2f Pa, CRC: 0x%04X", data.payload.temperature,
+                     data.payload.humidity, data.payload.pressure, data.crc);
+
+            if (xQueueSend(s_event_queue, &data, portMAX_DELAY) != pdTRUE) {
+                ESP_LOGE(TAG, "xQueueSend failed");
+                bme280_deinit();
+                vTaskDelete(NULL);
+            }
+            vTaskDelay(300 / portTICK_RATE_MS);
         }
-        vTaskDelay(300 / portTICK_RATE_MS);
-        if (ESP_OK == bme280_read_humidity(bme280, &humidity)) {
-            ESP_LOGI(TAG, "humidity:%f ", humidity);
-        }
-        vTaskDelay(300 / portTICK_RATE_MS);
-        if (ESP_OK == bme280_read_pressure(bme280, &pressure)) {
-            ESP_LOGI(TAG, "pressure:%f\n", pressure);
-        }
-        vTaskDelay(300 / portTICK_RATE_MS);
+        vTaskDelay(1000 / portTICK_RATE_MS);
     }
 }
 
@@ -230,10 +235,5 @@ void app_main(void) {
     wifi_init();
     test_espnow_init();
 
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
-
-    ESP_ERROR_CHECK(bme280_init());
-
-    bme280_test_getdata();
-    ESP_LOGI(TAG, "BME280 data read complete");
+    xTaskCreate(bme280_getdata_task, "bme280_getdata_task", 4096, NULL, 5, NULL);
 }
