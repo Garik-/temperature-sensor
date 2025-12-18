@@ -12,6 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "i2c_bus.h"
 #include "nvs_flash.h"
+#include "protocol.h"
 #include <assert.h>
 #include <stdlib.h>
 
@@ -28,17 +29,6 @@
 #define I2C_MASTER_NUM I2C_NUM_0
 
 #define GPIO_OUTPUT_PIN_SEL ((1ULL << BME_OUTPUT_PWR))
-
-typedef struct {
-    float temperature;
-    float humidity;
-    float pressure;
-} __attribute__((packed)) test_espnow_payload_t;
-
-typedef struct {
-    test_espnow_payload_t payload;
-    uint16_t crc; // CRC16 value of ESPNOW data.
-} __attribute__((packed)) test_espnow_data_t;
 
 static const char *TAG = "esp_now_sender";
 static uint8_t s_mac[ESP_NOW_ETH_ALEN] = {0x02, 0x12, 0x34, 0x56, 0x78, 0x9A};
@@ -198,18 +188,18 @@ static void bme280_getdata_task(void *pvParameter) {
         int cnt = 10;
         while (cnt--) {
             if (ESP_OK == bme280_read_temperature(bme280, &value)) {
-                data.payload.temperature = value;
+                data.payload.temperature = (int16_t)(value * 100);
             }
             if (ESP_OK == bme280_read_humidity(bme280, &value)) {
-                data.payload.humidity = value;
+                data.payload.humidity = (uint16_t)(value * 100);
             }
             if (ESP_OK == bme280_read_pressure(bme280, &value)) {
-                data.payload.pressure = value;
+                pack_pressure((uint32_t)(value * 100), data.payload.pressure);
             }
 
             data.crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&data.payload, sizeof(data.payload));
 
-            ESP_LOGI(TAG, "Temp: %.2f C, Hum: %.2f %%, Pres: %.2f Pa, CRC: 0x%04X", data.payload.temperature,
+            ESP_LOGD(TAG, "Temp: %d, Hum: %d %%, Pres: %d Pa, CRC: 0x%04X", data.payload.temperature,
                      data.payload.humidity, data.payload.pressure, data.crc);
 
             if (xQueueSend(s_event_queue, &data, portMAX_DELAY) != pdTRUE) {
