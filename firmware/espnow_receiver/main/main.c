@@ -139,7 +139,13 @@ static esp_err_t test_espnow_init(void) {
     peer->ifidx = ESPNOW_WIFI_IF;
     peer->encrypt = false;
     memcpy(peer->peer_addr, s_peer_mac, ESP_NOW_ETH_ALEN);
-    ESP_ERROR_CHECK(esp_now_add_peer(peer));
+
+    esp_err_t err = esp_now_add_peer(peer);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to add peer: %s", esp_err_to_name(err));
+        free(peer);
+        return ESP_FAIL;
+    }
     free(peer);
 
     xTaskCreate(test_espnow_task, "test_espnow_task", 2048, NULL, 4, NULL);
