@@ -7,6 +7,7 @@
 #include "esp_now.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
 #include "nvs_flash.h"
 #include "protocol.h"
 #include <assert.h>
@@ -16,6 +17,11 @@
 #define ESPNOW_WIFI_IF ESP_IF_WIFI_AP
 #define ESPNOW_QUEUE_SIZE 6
 #define ESPNOW_MAXDELAY 512
+
+#define DATA_BUFFER_SIZE 128
+
+static uint8_t data_buffer_pool[ESPNOW_QUEUE_SIZE][DATA_BUFFER_SIZE];
+static uint8_t data_buffer_index = 0;
 
 typedef struct {
     uint8_t mac_addr[ESP_NOW_ETH_ALEN];
@@ -27,6 +33,18 @@ static const char *TAG = "esp_now_receiver";
 
 static QueueHandle_t s_event_queue = NULL;
 static uint8_t s_peer_mac[ESP_NOW_ETH_ALEN] = {0x02, 0x12, 0x34, 0x56, 0x78, 0x9A};
+
+static uint8_t *get_static_buffer(int len) {
+    if (len > DATA_BUFFER_SIZE) {
+        ESP_LOGW(TAG, "Requested data is too large!");
+        return NULL;
+    }
+
+    uint8_t current_index = __atomic_fetch_add(&data_buffer_index, 1, __ATOMIC_SEQ_CST);
+    current_index %= ESPNOW_QUEUE_SIZE;
+
+    return data_buffer_pool[current_index];
+}
 
 /* WiFi should start before using ESPNOW */
 static void wifi_init(void) {
@@ -58,16 +76,15 @@ static void test_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint
 
     // TODO: add check dest_addr if needed
     memcpy(recv_cb.mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    recv_cb.data = malloc(len);
+    recv_cb.data = get_static_buffer(len);
     if (recv_cb.data == NULL) {
-        ESP_LOGE(TAG, "Malloc receive data fail");
+        ESP_LOGE(TAG, "get_static_buffer receive data fail");
         return;
     }
     memcpy(recv_cb.data, data, len);
     recv_cb.data_len = len;
     if (xQueueSend(s_event_queue, &recv_cb, ESPNOW_MAXDELAY) != pdTRUE) {
         ESP_LOGW(TAG, "Send receive queue fail");
-        free(recv_cb.data);
     }
 }
 
@@ -111,7 +128,6 @@ static void test_espnow_task(void *pvParameter) {
         ESP_LOGD(TAG, "receive data from " MACSTR ", len: %d", MAC2STR(recv_cb.mac_addr), recv_cb.data_len);
         if (recv_cb.data) {
             data_parse(recv_cb.data, recv_cb.data_len);
-            free(recv_cb.data);
         }
     }
 }
