@@ -25,6 +25,8 @@
 #define BME_SCL GPIO_NUM_6        // GPIO 6 (SCL)
 #define BME_OUTPUT_PWR GPIO_NUM_4 // GPIO 4 (HIGH)
 
+#define SEND_PACKET 5
+
 #define I2C_MASTER_FREQ_HZ 100000
 #define I2C_MASTER_NUM I2C_NUM_0
 
@@ -187,7 +189,7 @@ static void bme280_getdata_task(void *pvParameter) {
     data.start_flag = START_FLAG;
 
     for (;;) {
-        int cnt = 10;
+        int cnt = SEND_PACKET;
         while (cnt--) {
             if (ESP_OK == bme280_read_temperature(bme280, &value)) {
                 data.payload.temperature = (int16_t)(value * 100);
