@@ -184,6 +184,8 @@ static void bme280_getdata_task(void *pvParameter) {
         return;
     }
 
+    data.start_flag = START_FLAG;
+
     for (;;) {
         int cnt = 10;
         while (cnt--) {

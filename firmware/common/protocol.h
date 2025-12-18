@@ -3,6 +3,8 @@
 #ifndef PROTOCOL_HANDLER_H
 #define PROTOCOL_HANDLER_H
 
+#define START_FLAG 0x7E
+
 typedef struct
 {
     int16_t temperature; // 23.45°C → 2345
@@ -12,6 +14,7 @@ typedef struct
 
 typedef struct
 {
+    uint8_t start_flag; // Start flag, fixed value
     test_espnow_payload_t payload;
     uint16_t crc; // CRC16 value of ESPNOW data.
 } __attribute__((packed)) test_espnow_data_t;

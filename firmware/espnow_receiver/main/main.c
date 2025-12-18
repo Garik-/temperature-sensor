@@ -18,7 +18,7 @@
 #define ESPNOW_QUEUE_SIZE 6
 #define ESPNOW_MAXDELAY 512
 
-#define DATA_BUFFER_SIZE 128
+#define DATA_BUFFER_SIZE sizeof(test_espnow_data_t)
 
 static uint8_t data_buffer_pool[ESPNOW_QUEUE_SIZE][DATA_BUFFER_SIZE];
 static uint8_t data_buffer_index = 0;
@@ -69,7 +69,7 @@ static void test_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint
     uint8_t *mac_addr = recv_info->src_addr;
     // uint8_t *des_addr = recv_info->des_addr;
 
-    if (mac_addr == NULL || data == NULL || len <= 0) {
+    if (mac_addr == NULL || data == NULL || len <= 0 || len > DATA_BUFFER_SIZE) {
         ESP_LOGE(TAG, "Receive cb arg error");
         return;
     }
@@ -90,13 +90,17 @@ static void test_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint
 
 static void data_parse(const uint8_t *data, int len) {
     static const char *TAG_DATA = "qf8mzr";
+    test_espnow_data_t *recv_data = (test_espnow_data_t *)data;
 
-    if (len != sizeof(test_espnow_data_t)) {
-        ESP_LOGW(TAG, "Data length mismatch, expected %d, got %d", sizeof(test_espnow_data_t), len);
+    if (data == NULL || len <= 0) {
+        ESP_LOGW(TAG, "Received invalid data: NULL pointer or zero length");
         return;
     }
 
-    test_espnow_data_t *recv_data = (test_espnow_data_t *)data;
+    if (len != sizeof(test_espnow_data_t) || recv_data->start_flag != START_FLAG) {
+        ESP_LOGW(TAG, "Packet validation failed: length/flag mismatch");
+        return;
+    }
 
     uint16_t crc_calculated =
         esp_crc16_le(UINT16_MAX, (uint8_t const *)&recv_data->payload, sizeof(recv_data->payload));
@@ -160,6 +164,7 @@ static esp_err_t test_espnow_init(void) {
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to add peer: %s", esp_err_to_name(err));
         free(peer);
+        test_espnow_deinit();
         return ESP_FAIL;
     }
     free(peer);
