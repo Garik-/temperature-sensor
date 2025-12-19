@@ -11,7 +11,7 @@ import (
 	"temperature-sensor/internal/packet"
 )
 
-func TestEncodePacket(t *testing.T) {
+func TestEncodeUDPacket(t *testing.T) {
 	exp := packet.Packet{
 		Temperature: 25.5,
 		Humidity:    60.0,
@@ -26,7 +26,8 @@ func TestEncodePacket(t *testing.T) {
 	binary.LittleEndian.PutUint32(bytes[12:16], math.Float32bits(exp.Voltage))
 
 	var pack packet.Packet
-	err := packet.EncodePacket(bytes, &pack)
+
+	err := packet.EncodeUDPPacket(bytes, &pack)
 	require.NoError(t, err)
 
 	assert.InEpsilon(t, exp.Temperature, pack.Temperature, 1e-6)

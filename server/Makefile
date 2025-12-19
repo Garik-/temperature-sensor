@@ -7,18 +7,29 @@ VERSION = $(GIT_BRANCH)-$(GIT_HASH)
 GO_LDFLAGS = -ldflags="-w -s -X 'main.Version=$(VERSION)'"
 
 BINDIR = $(CURDIR)/bin
+DEVBINDIR = $(CURDIR)/devbin
 APP = temperature-sensor
 
 ARCHS = arm64 arm
 
+
+LINT_VERSION ?= v2.6.2
+LINT_BIN := $(DEVBINDIR)/golangci-lint
+
 tidy:
 	@go mod tidy
 
-lint: tidy
-	@go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run ./...
+lint: $(LINT_BIN)
+	$(LINT_BIN) run ./...
 
-fix: tidy
-	@go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run --fix ./...
+fix: $(LINT_BIN)
+	$(LINT_BIN) run --fix ./...
+
+$(LINT_BIN):
+	@echo "Installing golangci-lint $(LINT_VERSION)..."
+	@mkdir -p $(DEVBINDIR)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+		sh -s -- -b $(DEVBINDIR) $(LINT_VERSION)
 
 vuln: tidy
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
@@ -30,14 +41,14 @@ bench: tidy
 	@go test -v -bench=. -benchtime=5s -benchmem -count=2 ./...
 
 run: tidy
-	@go run .
+	@go run . -debug
 
 build: tidy
 	@echo "Building..."
-	@CGO_ENABLED=0 go build $(GO_LDFLAGS) -o $(BINDIR)/$(APP) .
+	@go build $(GO_LDFLAGS) -o $(BINDIR)/$(APP) .
 	@for arch in $(ARCHS); do \
 		echo "Building for $$arch..."; \
-		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build $(GO_LDFLAGS) -o $(BINDIR)/$(APP)-$$arch .; \
+		GOOS=linux GOARCH=$$arch go build $(GO_LDFLAGS) -o $(BINDIR)/$(APP)-$$arch .; \
 	done
 	@ls -lh bin
 

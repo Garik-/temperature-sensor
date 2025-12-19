@@ -13,6 +13,7 @@ import (
 func TestEventEmitter(t *testing.T) {
 	t.Run("Subscribe and Emit", func(t *testing.T) {
 		emitter := packet.NewEventEmitter()
+
 		ch := emitter.Subscribe()
 		defer emitter.Unsubscribe(ch)
 

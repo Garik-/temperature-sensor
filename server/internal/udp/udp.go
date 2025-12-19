@@ -20,10 +20,12 @@ type Service struct {
 	pc net.PacketConn
 }
 
-func Listen(port string) (*Service, error) {
+func Listen(ctx context.Context, port string) (*Service, error) {
 	slog.Info("listening UDP", "port", port)
 
-	pc, err := net.ListenPacket("udp4", port)
+	lc := net.ListenConfig{}
+
+	pc, err := lc.ListenPacket(ctx, "udp4", port)
 	if err != nil {
 		return nil, fmt.Errorf("listenPacket: %w", err)
 	}
@@ -74,7 +76,7 @@ func (s *Service) Listen(ctx context.Context, emitter eventEmitter) error {
 
 		var p packet.Packet
 
-		err = packet.EncodePacket(buf[:n], &p)
+		err = packet.EncodeUDPPacket(buf[:n], &p)
 		if err != nil {
 			return fmt.Errorf("encodePacket: %w", err)
 		}

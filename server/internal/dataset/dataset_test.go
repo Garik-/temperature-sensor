@@ -154,13 +154,9 @@ func TestConcurrent(t *testing.T) {
 
 	// Test concurrent series
 	for range 1000 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_ = set.timeSeries()
-		}()
+		})
 	}
 
 	wg.Wait()

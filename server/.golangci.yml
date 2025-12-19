@@ -1,17 +1,48 @@
+version: "2"
 run:
-  timeout: 5m
   modules-download-mode: readonly
-
 linters:
-  enable-all: true
+  default: all
   disable:
-    - paralleltest
-    - tenv
-    - varnamelen
-    - mnd
-    - exhaustruct
-    - forbidigo
     - depguard
-    - gofumpt
-    - gci
-    - godox
+    - noinlineerr
+    - paralleltest
+    - exhaustruct
+    - mnd
+    - wrapcheck
+  settings:
+    varnamelen:
+      min-name-length: 1
+    cyclop:
+      max-complexity: 13
+    funlen:
+      lines: 80
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      - path: '(.+)_test\.go'
+        linters:
+          - funlen
+          - cyclop
+          - exhaustruct
+          - varnamelen
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

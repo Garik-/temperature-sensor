@@ -39,7 +39,11 @@ type Packet struct {
 	Voltage     float32   `json:"voltage"`
 }
 
-func EncodePacket(data []byte, p *Packet) error {
+func PascalToMmHg(pascal float32) float32 {
+	return pascal / 133.322
+}
+
+func EncodeUDPPacket(data []byte, p *Packet) error {
 	buf := bytes.NewReader(data)
 
 	err := binary.Read(buf, binary.LittleEndian, &p.Temperature)
@@ -62,7 +66,7 @@ func EncodePacket(data []byte, p *Packet) error {
 		return fmt.Errorf("failed to read voltage: %w", err)
 	}
 
-	p.Pressure /= 133.322
+	p.Pressure = PascalToMmHg(p.Pressure)
 	p.Timestamp = time.Now()
 
 	return nil
