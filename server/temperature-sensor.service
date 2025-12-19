@@ -9,7 +9,7 @@ LogNamespace=temperature-sensor
 Type=simple
 User=xakep
 Group=xakep
-ExecStart=/home/xakep/bin/temperature-sensor -udp=false
+ExecStart=/home/xakep/bin/temperature-sensor -udp=false -dev=/dev/ttyACM0
 
 # restart if it crashes
 Restart=on-failure

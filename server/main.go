@@ -29,7 +29,7 @@ const (
 	defaultHTTPAddr  = ":8001"
 	defaultUDPPort   = ":12345"
 	defaultEnableUDP = false
-	defaultDevice    = "/dev/tty.usbserial-58B90790011"
+	defaultDevice    = "/dev/ttyACM0"
 	defaultDeviceTag = "qf8mzr"
 
 	shutdownTimeout = 2 * time.Second

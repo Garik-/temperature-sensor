@@ -72,7 +72,7 @@ func payloadToPacket(pl payload) packet.Packet {
 	return packet.Packet{
 		Temperature: float32(pl.temperature) / 100.0,
 		Humidity:    float32(pl.humidity) / 100.0,
-		Pressure:    packet.PascalToMmHg(float32(pl.pressure) / 100.0),
+		Pressure:    packet.PascalToMmHg(float32(pl.pressure)),
 		Timestamp:   time.Now(),
 	}
 }
