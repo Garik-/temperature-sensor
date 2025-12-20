@@ -70,6 +70,13 @@ static esp_err_t wifi_init(uint8_t channel, const uint8_t *mac) {
 
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "esp_wifi_start failed");
 
+    int8_t pwr;
+    ESP_ERROR_CHECK(esp_wifi_get_max_tx_power(&pwr));
+    ESP_LOGI(TAG, "WiFi TX power = %.2f dBm, pwr=%d", pwr * 0.25, pwr);
+    // ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(78)); // ~19.5 dBm
+
+    // ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
     ESP_RETURN_ON_ERROR(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE), TAG, "esp_wifi_set_channel failed");
 
     if (mac != NULL) {
