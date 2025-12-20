@@ -213,15 +213,17 @@ static void wgBME280_task(void *pvParameter) {
 
 static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    configASSERT(xTaskToNotify != NULL);
-    xTaskNotifyFromISR(xTaskToNotify, status, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    TaskHandle_t to_notify = __atomic_load_n(&xTaskToNotify, __ATOMIC_SEQ_CST);
+    if (to_notify) {
+        xTaskNotifyFromISR(to_notify, status, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
 }
 
 static void wg_espnow_task(void *peer_addr) {
     test_espnow_data_t data;
 
-    xTaskToNotify = xTaskGetCurrentTaskHandle();
+    __atomic_store_n(&xTaskToNotify, xTaskGetCurrentTaskHandle(), __ATOMIC_SEQ_CST);
 
     ESP_LOGD(TAG, "start sending data");
 
@@ -235,6 +237,7 @@ static void wg_espnow_task(void *peer_addr) {
                 ESP_OK) {
                 ESP_LOGE(TAG, "Send error");
 
+                __atomic_store_n(&xTaskToNotify, NULL, __ATOMIC_SEQ_CST);
                 wgTaskDelete();
                 return;
             }
@@ -252,6 +255,7 @@ static void wg_espnow_task(void *peer_addr) {
 
     ESP_LOGD(TAG, "stop sending data");
 
+    __atomic_store_n(&xTaskToNotify, NULL, __ATOMIC_SEQ_CST);
     wgTaskDelete();
 }
 

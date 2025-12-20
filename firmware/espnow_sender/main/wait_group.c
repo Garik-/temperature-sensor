@@ -13,7 +13,7 @@ esp_err_t wg_create(wait_group_handle_t *out) {
     if (!wg)
         return ESP_ERR_NO_MEM;
 
-    wg->owner = NULL;
+    wg->owner = xTaskGetCurrentTaskHandle();
     wg->counter = 0;
 
     *out = wg;
@@ -59,9 +59,6 @@ void wg_done(wait_group_handle_t wg) {
 void wg_wait(wait_group_handle_t wg) {
     configASSERT(wg);
 
-    /* set the waiting task as owner (so wg_done can notify it) */
-    __atomic_store_n(&wg->owner, xTaskGetCurrentTaskHandle(), __ATOMIC_SEQ_CST);
-
     /* fast-path: if counter is zero now, return immediately */
     int cnt = __atomic_load_n(&wg->counter, __ATOMIC_SEQ_CST);
     if (cnt == 0) {
@@ -75,7 +72,6 @@ void wg_wait(wait_group_handle_t wg) {
 
     /* ensure counter is zero and clear owner */
     __atomic_store_n(&wg->counter, 0, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&wg->owner, NULL, __ATOMIC_SEQ_CST);
 }
 
 void wg_destroy(wait_group_handle_t wg) {

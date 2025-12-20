@@ -58,7 +58,7 @@ static bool bat_adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc
     return calibrated;
 }
 
-static esp_err_t bet_adc_calibration_deinit(adc_cali_handle_t handle) {
+static esp_err_t bat_adc_calibration_deinit(adc_cali_handle_t handle) {
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
     ESP_LOGI(TAG, "deregister %s calibration scheme", "Curve Fitting");
     return adc_cali_delete_scheme_curve_fitting(handle);
@@ -131,7 +131,7 @@ esp_err_t bat_adc_deinit(bat_adc_handle_t handle) {
         return ESP_ERR_INVALID_ARG;
 
     if (handle->do_calibration && handle->cali_handle) {
-        ESP_LOG_ON_ERROR(bet_adc_calibration_deinit(handle->cali_handle), TAG, "bet_adc_calibration_deinit");
+        ESP_LOG_ON_ERROR(bat_adc_calibration_deinit(handle->cali_handle), TAG, "bet_adc_calibration_deinit");
         handle->cali_handle = NULL;
     }
 
