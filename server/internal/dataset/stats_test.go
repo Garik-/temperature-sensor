@@ -28,6 +28,7 @@ func TestEventResponse(t *testing.T) {
 	stats := &Stats{
 		temperature: newSetOfData(),
 		pressure:    newSetOfData(),
+		voltage:     newSetOfData(),
 		packet:      &mockSafePacket{},
 	}
 
@@ -38,12 +39,14 @@ func TestEventResponse(t *testing.T) {
 			mockPacket.Temperature = rand.Float32() * 100 //nolint:gosec
 			mockPacket.Pressure = rand.Float32() * 2000   //nolint:gosec
 			mockPacket.Humidity = rand.Float32() * 100    //nolint:gosec
+			mockPacket.Voltage = rand.Float32() * 100     //nolint:gosec
 
 			mockPacket.Timestamp = time.Date(2023, 10, day, hour, 0, 0, 0, time.UTC)
 
 			stats.packet.Set(mockPacket)
 			stats.temperature.push(mockPacket.Temperature, mockPacket.Timestamp)
 			stats.pressure.push(mockPacket.Pressure, mockPacket.Timestamp)
+			stats.voltage.push(mockPacket.Voltage, mockPacket.Timestamp)
 		}
 	}
 
@@ -53,6 +56,7 @@ func TestEventResponse(t *testing.T) {
 
 	assert.Len(t, response.Chart.Temperature, 90)
 	assert.Len(t, response.Chart.Pressure, 90)
+	assert.Len(t, response.Chart.Voltage, 90)
 
 	b, err := json.Marshal(response)
 	require.NoError(t, err)
