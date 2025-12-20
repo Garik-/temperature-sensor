@@ -36,8 +36,7 @@
 #define SEND_PACKET ESPNOW_QUEUE_SIZE
 #define SEND_PACKET_INTERVAL pdMS_TO_TICKS(100)
 
-#define uS_TO_S_FACTOR 1000000ULL
-#define SLEEP_INTERVAL (10 * 60 * uS_TO_S_FACTOR) // seconds
+#define SLEEP_INTERVAL 10 * 60 // seconds
 
 #define I2C_MASTER_FREQ_HZ 100000
 #define I2C_MASTER_NUM I2C_NUM_0
@@ -190,7 +189,7 @@ static void wgBME280_task(void *pvParameter) {
             data.payload.voltage = (uint16_t)((analogVolts / (packetCounter + 1)) * VOLTAGE_DIVIDER);
         }
 
-        ESP_LOGI(TAG, "volage=%d temperature=%d", data.payload.voltage, data.payload.temperature);
+        ESP_LOGD(TAG, "volage=%d temperature=%d", data.payload.voltage, data.payload.temperature);
 
         data.crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&data.payload, sizeof(data.payload));
 
@@ -224,7 +223,7 @@ static void wg_espnow_task(void *peer_addr) {
 
     xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    ESP_LOGI(TAG, "start sending data");
+    ESP_LOGD(TAG, "start sending data");
 
     BaseType_t xResult;
     uint32_t status;
@@ -251,7 +250,7 @@ static void wg_espnow_task(void *peer_addr) {
         }
     }
 
-    ESP_LOGI(TAG, "stop sending data");
+    ESP_LOGD(TAG, "stop sending data");
 
     wgTaskDelete();
 }
@@ -291,7 +290,9 @@ static void enter_deep_sleep() {
     if (SLEEP_INTERVAL <= 0)
         return;
 
-    esp_sleep_enable_timer_wakeup(SLEEP_INTERVAL);
+    ESP_LOGD(TAG, "enter deep_sleep");
+
+    ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup(SLEEP_INTERVAL * 1000000));
     esp_deep_sleep_start();
 }
 
@@ -333,7 +334,7 @@ void app_main(void) {
                 DEFER(esp_now_deinit);
 
                 wg_add(wg, 1);
-                xTaskCreate(wg_espnow_task, "wg_espnow_task", 2048, (void *const)peer_addr, 4, NULL);
+                xTaskCreate(wg_espnow_task, "wg_espnow_task", 4096, (void *const)peer_addr, 4, NULL);
             } else {
                 ESP_LOGE(TAG, "test_espnow_init failed");
             }
@@ -345,8 +346,9 @@ void app_main(void) {
         ESP_LOGE(TAG, "nvs_flash_init failed");
     }
 
-    ESP_LOGI(TAG, "wait tasks");
+    ESP_LOGD(TAG, "wait tasks...");
     wg_wait(wg);
+    ESP_LOGD(TAG, "wait tasks done");
 
     closer_close(s_closer);
     closer_destroy(s_closer);

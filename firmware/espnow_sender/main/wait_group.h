@@ -2,8 +2,10 @@
 #define _WAIT_GROUP_H_
 
 #include "esp_err.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
