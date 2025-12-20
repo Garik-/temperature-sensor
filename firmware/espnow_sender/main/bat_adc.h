@@ -16,7 +16,7 @@ typedef struct bat_adc_t *bat_adc_handle_t;
 
 esp_err_t bat_adc_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, bat_adc_handle_t *out);
 esp_err_t bat_adc_deinit(bat_adc_handle_t handle);
-esp_err_t bat_read(bat_adc_handle_t handle, int *value);
+esp_err_t bat_adc_read(bat_adc_handle_t handle, int *value);
 
 #ifdef __cplusplus
 }

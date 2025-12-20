@@ -10,6 +10,7 @@ typedef struct
     int16_t temperature; // 23.45°C → 2345
     uint16_t humidity;   // 56.78% → 5678
     uint8_t pressure[3]; // 101325 Pa
+    uint16_t voltage;    // MilliVolts
 } __attribute__((packed)) test_espnow_payload_t;
 
 typedef struct

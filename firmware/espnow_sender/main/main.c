@@ -31,10 +31,10 @@
 #define BAT_ADC_CHAN ADC_CHANNEL_3
 #define BAT_ADC_ATTEN ADC_ATTEN_DB_12
 
+#define VOLTAGE_DIVIDER 1.667 // 1M + 1.5M
+
 #define SEND_PACKET ESPNOW_QUEUE_SIZE
 #define SEND_PACKET_INTERVAL pdMS_TO_TICKS(100)
-
-#define WARMUP_MS pdMS_TO_TICKS(2)
 
 #define uS_TO_S_FACTOR 1000000ULL
 #define SLEEP_INTERVAL (10 * 60 * uS_TO_S_FACTOR) // seconds
@@ -131,7 +131,6 @@ static esp_err_t bme280_init() {
         return ESP_FAIL;
     }
 
-    vTaskDelay(WARMUP_MS);
     ESP_RETURN_ON_ERROR(bme280_default_init(bme280), TAG, "bme280_default_init");
 
     return ESP_OK;
@@ -167,13 +166,15 @@ static void wgBME280_task(void *pvParameter) {
         return;
     }
 
+    int analogVolts = 0;
+    int analogValue;
+
     float value;
 
     test_espnow_data_t data;
     data.start_flag = START_FLAG;
 
-    int cnt = SEND_PACKET;
-    while (cnt--) {
+    for (uint8_t packetCounter = 0; packetCounter < SEND_PACKET;) {
         if (ESP_OK == bme280_read_temperature(bme280, &value)) {
             data.payload.temperature = (int16_t)(value * 100);
         }
@@ -184,13 +185,24 @@ static void wgBME280_task(void *pvParameter) {
             pack_pressure((uint32_t)(value * 100), data.payload.pressure);
         }
 
+        if (ESP_OK == bat_adc_read(bat_adc_handle, &analogValue)) {
+            analogVolts += analogValue;
+            data.payload.voltage = (uint16_t)((analogVolts / (packetCounter + 1)) * VOLTAGE_DIVIDER);
+        }
+
+        ESP_LOGI(TAG, "volage=%d temperature=%d", data.payload.voltage, data.payload.temperature);
+
         data.crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&data.payload, sizeof(data.payload));
 
         if (xQueueSend(s_event_queue, &data, portMAX_DELAY) != pdTRUE) {
             ESP_LOGE(TAG, "xQueueSend failed");
             break;
         }
-        vTaskDelay(SEND_PACKET_INTERVAL);
+
+        packetCounter++;
+        if (packetCounter < SEND_PACKET) {
+            vTaskDelay(SEND_PACKET_INTERVAL);
+        }
     }
 
     ESP_LOG_ON_ERROR(bat_adc_deinit(bat_adc_handle), TAG, "bat_adc_deinit");
@@ -339,5 +351,5 @@ void app_main(void) {
     closer_close(s_closer);
     closer_destroy(s_closer);
 
-    // enter_deep_sleep();
+    enter_deep_sleep();
 }

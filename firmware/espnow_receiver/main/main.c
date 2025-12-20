@@ -109,8 +109,8 @@ static void data_parse(const uint8_t *data, int len) {
         return;
     }
 
-    ESP_LOGI(TAG_DATA, "%d,%d,%d", recv_data->payload.temperature, recv_data->payload.humidity,
-             unpack_pressure(recv_data->payload.pressure));
+    ESP_LOGI(TAG_DATA, "%d,%d,%d,%d", recv_data->payload.temperature, recv_data->payload.humidity,
+             unpack_pressure(recv_data->payload.pressure), recv_data->payload.voltage);
 }
 
 static void test_espnow_task(void *pvParameter) {

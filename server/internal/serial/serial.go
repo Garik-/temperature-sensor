@@ -66,6 +66,7 @@ type payload struct {
 	temperature int
 	humidity    int
 	pressure    int
+	voltage     int
 }
 
 func payloadToPacket(pl payload) packet.Packet {
@@ -73,6 +74,7 @@ func payloadToPacket(pl payload) packet.Packet {
 		Temperature: float32(pl.temperature) / 100.0,
 		Humidity:    float32(pl.humidity) / 100.0,
 		Pressure:    packet.PascalToMmHg(float32(pl.pressure)),
+		Voltage:     float32(pl.voltage),
 		Timestamp:   time.Now(),
 	}
 }
@@ -122,6 +124,14 @@ func parseFast(line string, tag string, out *payload) bool {
 
 	// parse int3
 	out.pressure, ok = parseInt(s, &i)
+	if !ok || i >= n || s[i] != ',' {
+		return false
+	}
+
+	i++
+
+	// parse int4
+	out.voltage, ok = parseInt(s, &i)
 
 	return ok
 }

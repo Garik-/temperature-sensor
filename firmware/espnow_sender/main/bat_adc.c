@@ -69,7 +69,7 @@ static esp_err_t bet_adc_calibration_deinit(adc_cali_handle_t handle) {
 #endif
 }
 
-esp_err_t bat_read(bat_adc_handle_t handle, int *value) {
+esp_err_t bat_adc_read(bat_adc_handle_t handle, int *value) {
     if (!handle || value == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
