@@ -5,8 +5,9 @@ const static char *TAG = "bat_adc";
 struct bat_adc_t {
     adc_oneshot_unit_handle_t oneshot_unit_handle;
     adc_cali_handle_t cali_handle;
+    adc_channel_t channel;
     bool do_calibration;
-}; // TODO: остановился на переписывании, вместо передачи кучи переменных передачи структуры
+};
 
 static bool bat_adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten,
                                      adc_cali_handle_t *out_handle) {
@@ -68,49 +69,77 @@ static esp_err_t bet_adc_calibration_deinit(adc_cali_handle_t handle) {
 #endif
 }
 
-esp_err_t bat_read(adc_oneshot_unit_handle_t handle, adc_channel_t chan, int *value) {
-    int raw = 0;
-    adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN0, &raw);
-    if (do_calibration) {
-        adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw[0][0], &voltage[0][0]))
+esp_err_t bat_read(bat_adc_handle_t handle, int *value) {
+    if (!handle || value == NULL) {
+        return ESP_ERR_INVALID_ARG;
     }
+
+    if (!handle->oneshot_unit_handle) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int raw = 0;
+    ESP_RETURN_ON_ERROR(adc_oneshot_read(handle->oneshot_unit_handle, handle->channel, &raw), TAG, "adc_oneshot_read");
+
+    if (!handle->do_calibration) {
+        *value = raw;
+        return ESP_OK;
+    }
+
+    if (!handle->cali_handle) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int voltage = 0;
+    ESP_RETURN_ON_ERROR(adc_cali_raw_to_voltage(handle->cali_handle, raw, &voltage), TAG, "adc_cali_raw_to_voltage");
+    *value = voltage;
+
+    return ESP_OK;
 }
 
-esp_err_t bat_adc_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten,
-                       adc_oneshot_unit_handle_t *out_oneshot_unit_handle, adc_cali_handle_t *out_cali_handle) {
+esp_err_t bat_adc_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, bat_adc_handle_t *out) {
+    if (!out)
+        return ESP_ERR_INVALID_ARG;
 
-    adc_oneshot_unit_handle_t adc1_handle = NULL;
+    struct bat_adc_t *handle = calloc(1, sizeof(*handle));
+    if (!handle)
+        return ESP_ERR_NO_MEM;
+
+    handle->channel = channel;
 
     adc_oneshot_unit_init_cfg_t init_config = {
         .unit_id = unit,
     };
-    esp_err_t ret = adc_oneshot_new_unit(&init_config, &adc1_handle);
-    if (ESP_OK == ret) {
-        adc_oneshot_chan_cfg_t config = {
-            .atten = atten,
-            .bitwidth = ADC_BITWIDTH_DEFAULT,
-        };
-        ret = adc_oneshot_config_channel(adc1_handle, channel, &config);
-        if (ESP_OK == ret) {
 
-            *out_oneshot_unit_handle = adc1_handle;
+    ESP_RETURN_ON_ERROR(adc_oneshot_new_unit(&init_config, &handle->oneshot_unit_handle), TAG, "adc_oneshot_new_unit");
 
-            adc_cali_handle_t adc1_cali_chan_handle = NULL;
-            do_calibration = bat_adc_calibration_init(unit, channel, atten, &adc1_cali_chan_handle);
+    adc_oneshot_chan_cfg_t config = {
+        .atten = atten,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    ESP_RETURN_ON_ERROR(adc_oneshot_config_channel(handle->oneshot_unit_handle, channel, &config), TAG,
+                        "adc_oneshot_config_channel");
 
-            if (do_calibration) {
-                *out_cali_handle = adc1_cali_chan_handle;
-            }
-        }
-    }
-    return ret;
+    handle->do_calibration = bat_adc_calibration_init(unit, channel, atten, &handle->cali_handle);
+
+    *out = handle;
+    return ESP_OK;
 }
 
-esp_err_t bat_adc_deinit(adc_oneshot_unit_handle_t oneshot_unit_handle, adc_cali_handle_t cali_handle) {
-    if (do_calibration && cali_handle != NULL) {
-        if (ESP_OK != bet_adc_calibration_deinit(cali_handle)) {
-            ESP_LOGE(TAG, "bet_adc_calibration_deinit failed");
-        }
+esp_err_t bat_adc_deinit(bat_adc_handle_t handle) {
+    if (!handle)
+        return ESP_ERR_INVALID_ARG;
+
+    if (handle->do_calibration && handle->cali_handle) {
+        ESP_LOG_ON_ERROR(bet_adc_calibration_deinit(handle->cali_handle), TAG, "bet_adc_calibration_deinit");
+        handle->cali_handle = NULL;
     }
-    return adc_oneshot_del_unit(oneshot_unit_handle);
+
+    if (handle->oneshot_unit_handle) {
+        ESP_LOG_ON_ERROR(adc_oneshot_del_unit(handle->oneshot_unit_handle), TAG, "adc_oneshot_del_unit");
+        handle->oneshot_unit_handle = NULL;
+    }
+
+    free(handle);
+    return ESP_OK;
 }

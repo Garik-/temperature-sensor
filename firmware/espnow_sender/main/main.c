@@ -5,6 +5,7 @@
 #include "bme280.h"
 #include "closer.h"
 #include "driver/gpio.h"
+#include "err.h"
 #include "esp_assert.h"
 #include "esp_check.h"
 #include "esp_crc.h"
@@ -80,8 +81,8 @@ static esp_err_t wifi_init(uint8_t channel, const uint8_t *mac) {
 }
 
 static void wifi_deinit() {
-    esp_wifi_stop();
-    esp_wifi_deinit();
+    ESP_LOG_ON_ERROR(esp_wifi_stop(), TAG, "esp_wifi_stop");
+    ESP_LOG_ON_ERROR(esp_wifi_deinit(), TAG, "esp_wifi_deinit");
 
     ESP_LOGD(TAG, "wifi_deinit");
 }
@@ -104,8 +105,8 @@ static void wg_delete() {
 static esp_err_t bme280_init() {
     gpio_config_t io_conf = {.pin_bit_mask = GPIO_OUTPUT_PIN_SEL, .mode = GPIO_MODE_OUTPUT};
 
-    ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "gpio_config failed");
-    ESP_RETURN_ON_ERROR(gpio_set_level(BME_OUTPUT_PWR, 1), TAG, "gpio_set_level failed");
+    ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "gpio_config");
+    ESP_RETURN_ON_ERROR(gpio_set_level(BME_OUTPUT_PWR, 1), TAG, "gpio_set_level");
 
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
@@ -117,50 +118,52 @@ static esp_err_t bme280_init() {
     };
     i2c_bus = i2c_bus_create(I2C_MASTER_NUM, &conf);
     if (i2c_bus == NULL) {
-        ESP_LOGE(TAG, "i2c_bus_create failed");
+        ESP_LOGE(TAG, "i2c_bus_create");
         gpio_set_level(BME_OUTPUT_PWR, 0);
         return ESP_FAIL;
     }
 
     bme280 = bme280_create(i2c_bus, BME280_I2C_ADDRESS_DEFAULT);
     if (bme280 == NULL) {
-        ESP_LOGE(TAG, "bme280_create failed");
+        ESP_LOGE(TAG, "bme280_create");
         i2c_bus_delete(&i2c_bus);
         gpio_set_level(BME_OUTPUT_PWR, 0);
         return ESP_FAIL;
     }
 
     vTaskDelay(WARMUP_MS);
-    ESP_RETURN_ON_ERROR(bme280_default_init(bme280), TAG, "bme280_default_init failed");
+    ESP_RETURN_ON_ERROR(bme280_default_init(bme280), TAG, "bme280_default_init");
 
     return ESP_OK;
 }
 
 static void bme280_deinit() {
-    bme280_delete(&bme280);
-    i2c_bus_delete(&i2c_bus);
-    gpio_set_level(BME_OUTPUT_PWR, 0);
+    ESP_LOG_ON_ERROR(bme280_delete(&bme280), TAG, "bme280_delete");
+    ESP_LOG_ON_ERROR(i2c_bus_delete(&i2c_bus), TAG, "i2c_bus_delete");
+    ESP_LOG_ON_ERROR(gpio_set_level(BME_OUTPUT_PWR, 0), TAG, "gpio_set_level");
     ESP_LOGD(TAG, "bme280_deinit");
 }
 
-static void bme280_task(void *pvParameter) {
+static inline void wgTaskDelete() {
+    wg_done(wg);
+    vTaskDelete(NULL);
+}
+
+static void wgBME280_task(void *pvParameter) {
     if (ESP_OK != bme280_init()) {
         ESP_LOGE(TAG, "BME280 init failed");
 
-        wg_done(wg);
-        vTaskDelete(NULL);
+        wgTaskDelete();
         return;
     }
 
-    adc_oneshot_unit_handle_t oneshot_unit_handle = NULL;
-    adc_cali_handle_t cali_handle = NULL;
+    bat_adc_handle_t bat_adc_handle = NULL;
 
-    if (ESP_OK != bat_adc_init(BAT_ADC_UNIT, BAT_ADC_CHAN, BAT_ADC_ATTEN, &oneshot_unit_handle, &cali_handle)) {
-        ESP_LOGE(TAG, "bat_adc_init_failed");
+    if (ESP_OK != bat_adc_init(BAT_ADC_UNIT, BAT_ADC_CHAN, BAT_ADC_ATTEN, &bat_adc_handle)) {
+        ESP_LOGE(TAG, "bat_adc_init");
 
         bme280_deinit();
-        wg_done(wg);
-        vTaskDelete(NULL);
+        wgTaskDelete();
         return;
     }
 
@@ -190,11 +193,11 @@ static void bme280_task(void *pvParameter) {
         vTaskDelay(SEND_PACKET_INTERVAL);
     }
 
-    bat_adc_deinit(oneshot_unit_handle, cali_handle);
-    bme280_deinit();
+    ESP_LOG_ON_ERROR(bat_adc_deinit(bat_adc_handle), TAG, "bat_adc_deinit");
+    bat_adc_handle = NULL;
 
-    wg_done(wg);
-    vTaskDelete(NULL);
+    bme280_deinit();
+    wgTaskDelete();
 }
 
 static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
@@ -204,7 +207,7 @@ static void test_espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-static void test_espnow_task(void *peer_addr) {
+static void wg_espnow_task(void *peer_addr) {
     test_espnow_data_t data;
 
     xTaskToNotify = xTaskGetCurrentTaskHandle();
@@ -221,8 +224,8 @@ static void test_espnow_task(void *peer_addr) {
                 ESP_OK) {
                 ESP_LOGE(TAG, "Send error");
 
-                wg_done(wg);
-                vTaskDelete(NULL);
+                wgTaskDelete();
+                return;
             }
 
             xResult = xTaskNotifyWait(pdFALSE,   /* Don't clear bits on entry. */
@@ -238,8 +241,7 @@ static void test_espnow_task(void *peer_addr) {
 
     ESP_LOGI(TAG, "stop sending data");
 
-    wg_done(wg);
-    vTaskDelete(NULL);
+    wgTaskDelete();
 }
 
 static esp_err_t test_espnow_init(const uint8_t *peer_addr) {
@@ -305,7 +307,7 @@ void app_main(void) {
         DEFER(nvs_flash_deinit);
 
         wg_add(wg, 1);
-        xTaskCreate(bme280_task, "bme280_task", 4096, NULL, 3, NULL);
+        xTaskCreate(wgBME280_task, "wgBME280_task", 4096, NULL, 3, NULL);
 
         const uint8_t device_mac[ESP_NOW_ETH_ALEN] = DEVICE_MAC;
         ret = wifi_init(CONFIG_ESPNOW_CHANNEL, device_mac);
@@ -319,7 +321,7 @@ void app_main(void) {
                 DEFER(esp_now_deinit);
 
                 wg_add(wg, 1);
-                xTaskCreate(test_espnow_task, "test_espnow_task", 2048, (void *const)peer_addr, 4, NULL);
+                xTaskCreate(wg_espnow_task, "wg_espnow_task", 2048, (void *const)peer_addr, 4, NULL);
             } else {
                 ESP_LOGE(TAG, "test_espnow_init failed");
             }
