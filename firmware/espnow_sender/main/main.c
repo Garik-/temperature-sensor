@@ -1,6 +1,7 @@
 
 // Делаем линейную логику для deep sleep
 
+#include "bat_adc.h"
 #include "bme280.h"
 #include "closer.h"
 #include "driver/gpio.h"
@@ -25,8 +26,14 @@
 #define BME_SCL GPIO_NUM_6        // GPIO 6 (SCL)
 #define BME_OUTPUT_PWR GPIO_NUM_4 // GPIO 4 (HIGH)
 
+#define BAT_ADC_UNIT ADC_UNIT_1
+#define BAT_ADC_CHAN ADC_CHANNEL_3
+#define BAT_ADC_ATTEN ADC_ATTEN_DB_12
+
 #define SEND_PACKET ESPNOW_QUEUE_SIZE
 #define SEND_PACKET_INTERVAL pdMS_TO_TICKS(100)
+
+#define WARMUP_MS pdMS_TO_TICKS(2)
 
 #define uS_TO_S_FACTOR 1000000ULL
 #define SLEEP_INTERVAL (10 * 60 * uS_TO_S_FACTOR) // seconds
@@ -123,6 +130,7 @@ static esp_err_t bme280_init() {
         return ESP_FAIL;
     }
 
+    vTaskDelay(WARMUP_MS);
     ESP_RETURN_ON_ERROR(bme280_default_init(bme280), TAG, "bme280_default_init failed");
 
     return ESP_OK;
@@ -139,6 +147,18 @@ static void bme280_task(void *pvParameter) {
     if (ESP_OK != bme280_init()) {
         ESP_LOGE(TAG, "BME280 init failed");
 
+        wg_done(wg);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    adc_oneshot_unit_handle_t oneshot_unit_handle = NULL;
+    adc_cali_handle_t cali_handle = NULL;
+
+    if (ESP_OK != bat_adc_init(BAT_ADC_UNIT, BAT_ADC_CHAN, BAT_ADC_ATTEN, &oneshot_unit_handle, &cali_handle)) {
+        ESP_LOGE(TAG, "bat_adc_init_failed");
+
+        bme280_deinit();
         wg_done(wg);
         vTaskDelete(NULL);
         return;
@@ -170,6 +190,7 @@ static void bme280_task(void *pvParameter) {
         vTaskDelay(SEND_PACKET_INTERVAL);
     }
 
+    bat_adc_deinit(oneshot_unit_handle, cali_handle);
     bme280_deinit();
 
     wg_done(wg);
@@ -316,5 +337,5 @@ void app_main(void) {
     closer_close(s_closer);
     closer_destroy(s_closer);
 
-    enter_deep_sleep();
+    // enter_deep_sleep();
 }
