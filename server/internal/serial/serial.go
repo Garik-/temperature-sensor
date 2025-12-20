@@ -79,7 +79,7 @@ func payloadToPacket(pl payload) packet.Packet {
 	}
 }
 
-func parseFast(line string, tag string, out *payload) bool {
+func parseFast(line string, tag string, out *payload) bool { //nolint:cyclop
 	// 1. быстрый фильтр по TAG
 	tagPos := strings.Index(line, tag)
 	if tagPos == -1 {
