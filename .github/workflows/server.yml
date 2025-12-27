@@ -55,7 +55,7 @@ jobs:
           cache-dependency-path: |
             server/go.sum
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.6.2
           working-directory: ./server
