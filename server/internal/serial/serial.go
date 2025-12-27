@@ -3,7 +3,6 @@ package serial
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"temperature-sensor/internal/packet"
@@ -12,29 +11,51 @@ import (
 	"go.bug.st/serial"
 )
 
+const retryInterval = 2 * time.Second
+
 type Service struct {
-	port serial.Port
+	portName string
+	baudRate int
 }
 
-func Open(portName string, baudRate int) (*Service, error) {
-	mode := &serial.Mode{
-		BaudRate: baudRate,
-	}
-
-	slog.Info("open serial", "portName", portName, "baudRate", baudRate)
-
-	port, err := serial.Open(portName, mode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open serial port: %w", err)
-	}
-
+func New(portName string, baudRate int) *Service {
 	return &Service{
-		port: port,
-	}, nil
+		portName: portName,
+		baudRate: baudRate,
+	}
 }
 
-func (s *Service) Close() error {
-	return s.port.Close()
+func (s *Service) Run(ctx context.Context, tag string, emitter eventEmitter) error {
+	mode := &serial.Mode{
+		BaudRate: s.baudRate,
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
+		port, err := serial.Open(s.portName, mode)
+		if err != nil {
+			slog.ErrorContext(ctx, "open failed", "port", s.portName, "err", err)
+			time.Sleep(retryInterval)
+
+			continue
+		}
+
+		err = read(ctx, port, tag, emitter)
+
+		port.Close()
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		slog.Warn("serial disconnected, retrying", "err", err)
+		time.Sleep(retryInterval)
+	}
 }
 
 type eventEmitter interface {
@@ -43,7 +64,14 @@ type eventEmitter interface {
 
 func parseInt(s string, i *int) (int, bool) {
 	n := len(s)
+	start := *i
+	sign := 1
 	val := 0
+
+	if *i < n && s[*i] == '-' {
+		sign = -1
+		*i++
+	}
 
 	for *i < n {
 		c := s[*i]
@@ -55,11 +83,11 @@ func parseInt(s string, i *int) (int, bool) {
 		*i++
 	}
 
-	if *i == 0 {
+	if *i == start || (*i == start+1 && sign == -1) {
 		return 0, false
 	}
 
-	return val, true
+	return val * sign, true
 }
 
 type payload struct {
@@ -136,8 +164,8 @@ func parseFast(line string, tag string, out *payload) bool { //nolint:cyclop
 	return ok
 }
 
-func (s *Service) Read(ctx context.Context, tag string, emitter eventEmitter) error {
-	reader := bufio.NewScanner(s.port)
+func read(ctx context.Context, port serial.Port, tag string, emitter eventEmitter) error {
+	reader := bufio.NewScanner(port)
 	reader.Split(bufio.ScanLines)
 
 	var out payload
@@ -155,7 +183,7 @@ func (s *Service) Read(ctx context.Context, tag string, emitter eventEmitter) er
 		}
 
 		if parseFast(line, tag, &out) {
-			slog.DebugContext(ctx, line, "payload", out)
+			slog.DebugContext(ctx, "parsed payload", "line", line, "payload", out)
 			emitter.Emit(payloadToPacket(out))
 		}
 	}

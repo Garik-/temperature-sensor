@@ -19,6 +19,8 @@ func TestParseString(t *testing.T) {
 		{"I (4041275) qf8mzr: 2314,2834", false, payload{}},
 		{"I (4041275) qf8mzr: 2314,2834,99819,123", true,
 			payload{temperature: 2314, humidity: 2834, pressure: 99819, voltage: 123}},
+		{"I (4041275) qf8mzr: -1,2834,99819,123", true,
+			payload{temperature: -1, humidity: 2834, pressure: 99819, voltage: 123}},
 		{"I (4041275) qf8mzr: abc,2834,99819", false, payload{}},
 		{"Random string without tag", false, payload{}},
 	}

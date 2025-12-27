@@ -86,12 +86,7 @@ func main() { //nolint:funlen
 		defer serverUDP.Close()
 	}
 
-	serialService, err := serial.Open(*device, 115200)
-	if err != nil {
-		slog.Error("failed to open serial port", "error", err, "device", *device)
-
-		return
-	}
+	serialService := serial.New(*device, 115200)
 
 	emitter := packet.NewEventEmitter()
 	defer emitter.Close()
@@ -114,13 +109,7 @@ func main() { //nolint:funlen
 	}
 
 	g.Go(func() error {
-		return serialService.Read(gCtx, *deviceTag, emitter)
-	})
-
-	g.Go(func() error {
-		<-gCtx.Done()
-
-		return serialService.Close()
+		return serialService.Run(gCtx, *deviceTag, emitter)
 	})
 
 	g.Go(func() error {
