@@ -3,7 +3,7 @@ module temperature-sensor
 go 1.25
 
 require (
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.bug.st/serial v1.6.4
 	golang.org/x/sync v0.19.0
 )
