@@ -1,0 +1,48 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+linters:
+  default: all
+  disable:
+    - depguard
+    - noinlineerr
+    - paralleltest
+    - exhaustruct
+    - mnd
+    - wrapcheck
+  settings:
+    varnamelen:
+      min-name-length: 1
+    cyclop:
+      max-complexity: 13
+    funlen:
+      lines: 80
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      - path: '(.+)_test\.go'
+        linters:
+          - funlen
+          - cyclop
+          - exhaustruct
+          - varnamelen
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
