@@ -1,0 +1,14 @@
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.133.0
+    ports:
+      - 8428:8428
+    volumes:
+      - vmdata:/storage
+    command:
+      - "--storageDataPath=/storage"
+      - "--httpListenAddr=:8428"
+    restart: always
+
+volumes:
+  vmdata: {}

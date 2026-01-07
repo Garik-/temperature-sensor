@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -16,13 +18,13 @@ import (
 
 const (
 	retryInterval         = 2 * time.Second
-	metricsOutputInterval = 5 * time.Minute
+	metricsOutputInterval = 5 * time.Second
 
 	defaultPortName = "/dev/ttyACM0"
 	defaultTag      = "qf8mzr"
 	defaultBaudRate = 115200
 
-	defaultVictoriaURL = "http://127.0.0.1:8428/api/v1/import/prometheus"
+	defaultPushURL = "http://127.0.0.1:8428/api/v1/import/prometheus"
 )
 
 var (
@@ -35,7 +37,6 @@ var (
 type payloadFields [4]int
 
 func parsePayload(line string, tag string, out *payloadFields) bool {
-	// Найти тег
 	idx := strings.Index(line, tag+": ")
 	if idx == -1 {
 		return false
@@ -51,7 +52,6 @@ func parsePayload(line string, tag string, out *payloadFields) bool {
 		if i < len(data) {
 			c = data[i]
 		} else {
-			// фиктивный разделитель для последнего числа
 			c = ','
 		}
 
@@ -160,18 +160,35 @@ func main() {
 
 	slog.SetDefault(logger)
 
-	err := metrics.InitPush(defaultVictoriaURL, metricsOutputInterval, `service_name="temperature-sensor"`, true)
-	if err != nil {
-		slog.Error("metrics init failed", "err", err)
+	pushURL := flag.String("push", defaultPushURL, "it is recommended pushing metrics to /api/v1/import/prometheus")
+	portName := flag.String("port", defaultPortName, "the serial port")
+	baudRate := flag.Int("baud", defaultBaudRate, "baud rate")
+	tag := flag.String("tag", defaultTag, "device log tag")
 
-		return
-	}
+	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	err = process(ctx, defaultTag, defaultPortName, defaultBaudRate)
+	logger.InfoContext(ctx, "flags", "push", *pushURL, "port", *portName, "baud", *baudRate, "tag", *tag)
+
+	writeMetrics := func(w io.Writer) {
+		metrics.WritePrometheus(w, true)
+	}
+
+	opts := &metrics.PushOptions{
+		ExtraLabels: `service_name="temperature-sensor", tag="` + *tag + `"`,
+	}
+
+	err := metrics.InitPushExtWithOptions(ctx, *pushURL, metricsOutputInterval, writeMetrics, opts)
 	if err != nil {
-		slog.Error("processing failed", "err", err)
+		logger.ErrorContext(ctx, "InitPushExtWithOptions", "err", err)
+
+		return
+	}
+
+	err = process(ctx, *tag, *portName, *baudRate)
+	if err != nil {
+		logger.ErrorContext(ctx, "process", "err", err)
 	}
 }
