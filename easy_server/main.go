@@ -17,14 +17,14 @@ import (
 )
 
 const (
-	retryInterval         = 2 * time.Second
-	metricsOutputInterval = 5 * time.Second
+	retryInterval = 2 * time.Second
 
 	defaultPortName = "/dev/ttyACM0"
 	defaultTag      = "qf8mzr"
 	defaultBaudRate = 115200
 
-	defaultPushURL = "http://127.0.0.1:8428/api/v1/import/prometheus"
+	defaultPushURL      = "http://127.0.0.1:8428/api/v1/import/prometheus"
+	defaultPushInterval = 5 * time.Minute
 )
 
 var (
@@ -161,6 +161,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	pushURL := flag.String("push", defaultPushURL, "it is recommended pushing metrics to /api/v1/import/prometheus")
+	pushInterval := flag.Duration("interval", defaultPushInterval, "metrics push interval")
 	portName := flag.String("port", defaultPortName, "the serial port")
 	baudRate := flag.Int("baud", defaultBaudRate, "baud rate")
 	tag := flag.String("tag", defaultTag, "device log tag")
@@ -170,7 +171,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	logger.InfoContext(ctx, "flags", "push", *pushURL, "port", *portName, "baud", *baudRate, "tag", *tag)
+	logger.InfoContext(
+		ctx,
+		"flags",
+		"push", *pushURL,
+		"interval", *pushInterval,
+		"port", *portName,
+		"baud", *baudRate,
+		"tag", *tag,
+	)
 
 	writeMetrics := func(w io.Writer) {
 		metrics.WritePrometheus(w, true)
@@ -180,7 +189,7 @@ func main() {
 		ExtraLabels: `service_name="temperature-sensor", tag="` + *tag + `"`,
 	}
 
-	err := metrics.InitPushExtWithOptions(ctx, *pushURL, metricsOutputInterval, writeMetrics, opts)
+	err := metrics.InitPushExtWithOptions(ctx, *pushURL, *pushInterval, writeMetrics, opts)
 	if err != nil {
 		logger.ErrorContext(ctx, "InitPushExtWithOptions", "err", err)
 
