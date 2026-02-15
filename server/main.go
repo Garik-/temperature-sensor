@@ -54,8 +54,7 @@ func main() { //nolint:funlen
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	slog.InfoContext(ctx, "flags", "port", cfg.UDPServer.Port, "addr", cfg.HTTPServer.Addr, "dev", cfg.Serial.PortName,
-		"tag", cfg.Serial.Tag, "udp", cfg.UDPServer.Enable, "serial", cfg.Serial.Enable, "debug", cfg.Debug)
+	logStartupConfig(cfg)
 
 	var (
 		serverUDP     *udp.Service
@@ -99,7 +98,7 @@ func main() { //nolint:funlen
 
 	if cfg.UDPServer.Enable {
 		g.Go(func() error {
-			return serverUDP.Listen(ctx, emitter)
+			return serverUDP.Listen(gCtx, emitter)
 		})
 	}
 
@@ -138,13 +137,59 @@ func main() { //nolint:funlen
 	g.Go(func() error {
 		<-gCtx.Done()
 
-		ctx, cancel := context.WithTimeout(ctx, shutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 		defer cancel()
 
-		return serverHTTP.Shutdown(ctx)
+		return serverHTTP.Shutdown(shutdownCtx)
 	})
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server error", "error", err)
+	}
+}
+
+func logStartupConfig(cfg config.Config) {
+	slog.Info(
+		"startup config",
+		"http_addr",
+		cfg.HTTPServer.Addr,
+		"debug",
+		cfg.Debug,
+		"udp_enabled",
+		cfg.UDPServer.Enable,
+		"serial_enabled",
+		cfg.Serial.Enable,
+		"mqtt_enabled",
+		cfg.MQTT.Enable,
+	)
+
+	if cfg.UDPServer.Enable {
+		slog.Info("udp config", "port", cfg.UDPServer.Port)
+	}
+
+	if cfg.Serial.Enable {
+		slog.Info(
+			"serial config",
+			"port",
+			cfg.Serial.PortName,
+			"baud",
+			cfg.Serial.BaudRate,
+			"tag",
+			cfg.Serial.Tag,
+		)
+	}
+
+	if cfg.MQTT.Enable {
+		slog.Info(
+			"mqtt config",
+			"broker",
+			cfg.MQTT.Broker,
+			"topic",
+			cfg.MQTT.Topic,
+			"client_id",
+			cfg.MQTT.ClientID,
+			"username",
+			cfg.MQTT.Username,
+		)
 	}
 }

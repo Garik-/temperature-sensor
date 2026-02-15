@@ -41,7 +41,7 @@ bench: tidy
 	@go test -v -bench=. -benchtime=5s -benchmem -count=2 ./...
 
 run: tidy
-	@go run . -debug
+	@go run . -app-debug
 
 build: tidy
 	@echo "Building..."

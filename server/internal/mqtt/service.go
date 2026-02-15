@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"temperature-sensor/internal/config"
@@ -21,8 +22,6 @@ type eventEmitter interface {
 }
 
 func New(cfg config.MQTT, emitter eventEmitter) *Service {
-	logger := slog.Default()
-
 	srv := &Service{
 		topic:   cfg.Topic,
 		emitter: emitter,
@@ -35,21 +34,19 @@ func New(cfg config.MQTT, emitter eventEmitter) *Service {
 	opts.SetDefaultPublishHandler(srv.messageHandler())
 	opts.SetPingTimeout(cfg.PingTimeout)
 	opts.SetConnectionNotificationHandler(func(_ mqtt.Client, notification mqtt.ConnectionNotification) {
-		l := logger.With("component", "mqtt-connection-notifier")
-
 		switch n := notification.(type) {
 		case mqtt.ConnectionNotificationConnected:
-			l.Info("connected")
+			slog.Debug("connected")
 		case mqtt.ConnectionNotificationConnecting:
-			l.Info("connecting", "isReconnect", n.IsReconnect, "attempt", n.Attempt)
+			slog.Debug("connecting", "isReconnect", n.IsReconnect, "attempt", n.Attempt)
 		case mqtt.ConnectionNotificationFailed:
-			l.Info("connection failed", "reason", n.Reason)
+			slog.Debug("connection failed", "reason", n.Reason)
 		case mqtt.ConnectionNotificationLost:
-			l.Info("connection lost", "reason", n.Reason)
+			slog.Debug("connection lost", "reason", n.Reason)
 		case mqtt.ConnectionNotificationBroker:
-			l.Info("broker connection", "broker", n.Broker.String())
+			slog.Debug("broker connection", "broker", n.Broker.String())
 		case mqtt.ConnectionNotificationBrokerFailed:
-			l.Info("broker connection failed", "reason", n.Reason, "broker", n.Broker.String())
+			slog.Debug("broker connection failed", "reason", n.Reason, "broker", n.Broker.String())
 		}
 	})
 
@@ -73,6 +70,10 @@ func (s *Service) Run(ctx context.Context) error {
 }
 
 func (s *Service) Close() error {
+	if !s.client.IsConnectionOpen() {
+		return nil
+	}
+
 	if token := s.client.Unsubscribe(s.topic); token.Wait() && token.Error() != nil {
 		return fmt.Errorf("unsubscribe: %w", token.Error())
 	}
@@ -84,13 +85,18 @@ func (s *Service) Close() error {
 
 func (s *Service) messageHandler() mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
+		raw := msg.Payload()
+		rawHex := hex.EncodeToString(raw)
+		slog.Debug("mqtt payload received", "topic", msg.Topic(), "raw_hex", rawHex, "size", len(raw))
+
 		var p packet.Packet
-		if err := packet.EncodeMQTTPacket(msg.Payload(), &p); err != nil {
-			slog.Warn("failed to parse mqtt payload", "topic", msg.Topic(), "error", err, "size", len(msg.Payload()))
+		if err := packet.EncodeMQTTPacket(raw, &p); err != nil {
+			slog.Warn("failed to parse mqtt payload", "topic", msg.Topic(), "error", err, "size", len(raw), "raw_hex", rawHex)
 
 			return
 		}
 
+		slog.Debug("mqtt payload parsed", "topic", msg.Topic(), "packet", p.String())
 		s.emitter.Emit(p)
 	}
 }
