@@ -2,3 +2,5 @@
 secrets.h
 .vscode/
 server/bin/
+.gocache/
+.golangci-cache/

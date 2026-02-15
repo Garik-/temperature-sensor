@@ -13,7 +13,7 @@ APP = temperature-sensor
 ARCHS = arm64 arm
 
 
-LINT_VERSION ?= v2.6.2
+LINT_VERSION ?= v2.9.0
 LINT_BIN := $(DEVBINDIR)/golangci-lint
 
 tidy:

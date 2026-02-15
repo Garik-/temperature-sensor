@@ -53,7 +53,7 @@ func TestPush(t *testing.T) {
 func TestTimeSeries(t *testing.T) {
 	set := newSetOfData()
 
-	expectedSeries := make(timeSeries, 0)
+	expectedSeries := make(timeSeries, 0, 60)
 
 	// Add data
 	for i := range 20 {

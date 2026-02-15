@@ -35,3 +35,66 @@ func TestEncodeUDPacket(t *testing.T) {
 	assert.InEpsilon(t, exp.Pressure/133.322, pack.Pressure, 1e-6)
 	assert.InEpsilon(t, exp.Voltage, pack.Voltage, 1e-6)
 }
+
+func TestEncodeMQTTPacket(t *testing.T) {
+	const (
+		startFlag     = 0x7E
+		temperature   = int16(2345)
+		humidity      = uint16(5678)
+		pressureTimes = uint32(10132500) // Pa*100
+		voltage       = uint16(3300)
+	)
+
+	data := make([]byte, 12)
+	data[0] = startFlag
+
+	binary.LittleEndian.PutUint16(data[1:3], uint16(temperature))
+	binary.LittleEndian.PutUint16(data[3:5], humidity)
+	data[5] = byte((pressureTimes >> 16) & 0xff)
+	data[6] = byte((pressureTimes >> 8) & 0xff)
+	data[7] = byte(pressureTimes & 0xff)
+	binary.LittleEndian.PutUint16(data[8:10], voltage)
+
+	crc := crc16LEForTest(0xffff, data[1:10])
+	binary.LittleEndian.PutUint16(data[10:12], crc)
+
+	var pack packet.Packet
+
+	err := packet.EncodeMQTTPacket(data, &pack)
+	require.NoError(t, err)
+
+	assert.InEpsilon(t, 23.45, pack.Temperature, 1e-6)
+	assert.InEpsilon(t, 56.78, pack.Humidity, 1e-6)
+	assert.InEpsilon(t, float32(101325.0/133.322), pack.Pressure, 1e-6)
+	assert.InEpsilon(t, 3300.0, pack.Voltage, 1e-6)
+}
+
+func TestEncodeMQTTPacketInvalidCRC(t *testing.T) {
+	data := make([]byte, 12)
+	data[0] = 0x7E
+	// zero payload and wrong crc
+	binary.LittleEndian.PutUint16(data[10:12], 0x1234)
+
+	var pack packet.Packet
+
+	err := packet.EncodeMQTTPacket(data, &pack)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid crc")
+}
+
+func crc16LEForTest(seed uint16, data []byte) uint16 {
+	crc := seed
+
+	for _, b := range data {
+		crc ^= uint16(b)
+		for range 8 {
+			if crc&1 != 0 {
+				crc = (crc >> 1) ^ 0xa001
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+
+	return crc
+}

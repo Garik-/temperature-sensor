@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"temperature-sensor/internal/config"
 	"temperature-sensor/internal/dataset"
+	"temperature-sensor/internal/mqtt"
 	"temperature-sensor/internal/packet"
 	"temperature-sensor/internal/serial"
 	"temperature-sensor/internal/udp"
@@ -26,30 +27,16 @@ var (
 )
 
 const (
-	defaultHTTPAddr  = ":8001"
-	defaultUDPPort   = ":12345"
-	defaultEnableUDP = false
-	defaultDevice    = "/dev/ttyACM0"
-	defaultDeviceTag = "qf8mzr"
-
 	shutdownTimeout = 2 * time.Second
 	clearInterval   = 1 * 24 * time.Hour
 )
 
 func main() { //nolint:funlen
-	port := flag.String("port", defaultUDPPort, "UDP server port")
-	addr := flag.String("addr", defaultHTTPAddr, "HTTP server address")
-	device := flag.String("dev", defaultDevice, "serial device path (e.g., /dev/ttyUSB0)")
-	deviceTag := flag.String("tag", defaultDeviceTag, "device tag identifier")
-	showVersion := flag.Bool("v", false, "show version information")
-	debugMode := flag.Bool("debug", false, "enable debug mode")
-	enableUDP := flag.Bool("udp", defaultEnableUDP, "enable UDP server")
-
-	flag.Parse()
+	cfg := config.FromFlags()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: func() slog.Level {
-			if *debugMode {
+			if cfg.Debug {
 				return slog.LevelDebug
 			}
 
@@ -59,7 +46,7 @@ func main() { //nolint:funlen
 
 	slog.SetDefault(logger)
 
-	if *showVersion {
+	if cfg.ShowVersion {
 		slog.Info("version info", "version", Version)
 		os.Exit(0)
 	}
@@ -67,16 +54,18 @@ func main() { //nolint:funlen
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	slog.InfoContext(ctx, "flags", "port", *port, "addr", *addr, "dev", *device,
-		"tag", *deviceTag, "udp", *enableUDP, "debug", *debugMode)
+	slog.InfoContext(ctx, "flags", "port", cfg.UDPServer.Port, "addr", cfg.HTTPServer.Addr, "dev", cfg.Serial.PortName,
+		"tag", cfg.Serial.Tag, "udp", cfg.UDPServer.Enable, "serial", cfg.Serial.Enable, "debug", cfg.Debug)
 
 	var (
-		serverUDP *udp.Service
-		err       error
+		serverUDP     *udp.Service
+		serialService *serial.Service
+		mqttService   *mqtt.Service
+		err           error
 	)
 
-	if *enableUDP {
-		serverUDP, err = udp.Listen(ctx, *port)
+	if cfg.UDPServer.Enable {
+		serverUDP, err = udp.Listen(ctx, cfg.UDPServer.Port)
 		if err != nil {
 			slog.Error("failed to start UDP server", "error", err)
 
@@ -86,14 +75,20 @@ func main() { //nolint:funlen
 		defer serverUDP.Close()
 	}
 
-	serialService := serial.New(*device, 115200)
+	if cfg.Serial.Enable {
+		serialService = serial.New(cfg.Serial.PortName, cfg.Serial.BaudRate)
+	}
 
 	emitter := packet.NewEventEmitter()
 	defer emitter.Close()
 
+	if cfg.MQTT.Enable {
+		mqttService = mqtt.New(cfg.MQTT, emitter)
+	}
+
 	stats := dataset.NewStats()
 
-	serverHTTP, err := web.New(ctx, *addr, emitter, stats)
+	serverHTTP, err := web.New(ctx, cfg.HTTPServer.Addr, emitter, stats)
 	if err != nil {
 		slog.Error("failed to create HTTP server", "error", err)
 
@@ -102,15 +97,29 @@ func main() { //nolint:funlen
 
 	g, gCtx := errgroup.WithContext(ctx)
 
-	if *enableUDP {
+	if cfg.UDPServer.Enable {
 		g.Go(func() error {
 			return serverUDP.Listen(ctx, emitter)
 		})
 	}
 
-	g.Go(func() error {
-		return serialService.Run(gCtx, *deviceTag, emitter)
-	})
+	if cfg.Serial.Enable {
+		g.Go(func() error {
+			return serialService.Run(gCtx, cfg.Serial.Tag, emitter)
+		})
+	}
+
+	if cfg.MQTT.Enable {
+		g.Go(func() error {
+			return mqttService.Run(gCtx)
+		})
+
+		g.Go(func() error {
+			<-gCtx.Done()
+
+			return mqttService.Close()
+		})
+	}
 
 	g.Go(func() error {
 		return stats.Subscribe(gCtx, emitter)
