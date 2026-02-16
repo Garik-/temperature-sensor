@@ -139,7 +139,7 @@ func parseMQTTPayload(payload []byte, p *Packet) error {
 	voltage := binary.LittleEndian.Uint16(payload[7:9])
 
 	invalidRange := temperature < -5000 || temperature > 9000 || humidity > 10000 ||
-		pressurePacked < 30000 || pressurePacked > 120000 || voltage < 2000 || voltage > 5000
+		pressurePacked < 30000 || pressurePacked > 120000 || voltage > 5000
 	if invalidRange {
 		return fmt.Errorf(
 			"%w: temp=%d hum=%d pressurePa=%d voltage=%d",

@@ -20,7 +20,7 @@
 #include "wait_group.h"
 
 #define ESPNOW_WIFI_IF ESP_IF_WIFI_STA
-#define ESPNOW_QUEUE_SIZE 5
+#define ESPNOW_QUEUE_SIZE 3
 #define ESPNOW_MAXDELAY pdMS_TO_TICKS(512)
 
 #define BME_SDA GPIO_NUM_5        // GPIO 5 (SDA)
@@ -36,7 +36,7 @@
 #define SEND_PACKET ESPNOW_QUEUE_SIZE
 #define SEND_PACKET_INTERVAL pdMS_TO_TICKS(100)
 
-#define SLEEP_INTERVAL 10 * 60 // seconds
+#define SLEEP_INTERVAL 3600 // seconds
 
 #define I2C_MASTER_FREQ_HZ 100000
 #define I2C_MASTER_NUM I2C_NUM_0
@@ -303,7 +303,7 @@ static void enter_deep_sleep() {
 
     ESP_LOGD(TAG, "enter deep_sleep");
 
-    ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup(SLEEP_INTERVAL * 1000000));
+    ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL * 1000000ULL));
     esp_deep_sleep_start();
 }
 
@@ -339,7 +339,9 @@ void app_main(void) {
 
         if (ESP_OK == ret) { // wifi_init
 
-            const uint8_t peer_addr[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x15, 0x84, 0x45}; // a0:b7:65:15:84:45
+            // const uint8_t peer_addr[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x15, 0x84, 0x45}; // a0:b7:65:15:84:45
+
+            const uint8_t peer_addr[ESP_NOW_ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
             if (ESP_OK == test_espnow_init(peer_addr)) {
                 DEFER(esp_now_deinit);
